@@ -1,0 +1,4 @@
+/* content.css — Toast 样式占位（实际样式在 Shadow DOM 内） */
+#text-collector-toast-host {
+  all: initial;
+}
