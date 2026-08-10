@@ -112,6 +112,42 @@ function isEditableElement(el) {
 }
 
 /**
+ * 检查选区是否落在可编辑区域内（P2：补充 anchorNode 校验）。
+ * 原先仅检查 activeElement，对“未聚焦的 contenteditable 内划词”会漏判；
+ * 这里追加对 selection.anchorNode / focusNode 向上查找最近的可编辑祖先。
+ */
+function isSelectionInEditable(selection) {
+  try {
+    const node = selection.anchorNode || selection.focusNode;
+    if (!node) return false;
+    const el = node.nodeType === 1 ? node : node.parentElement;
+    if (!el) return false;
+    // closest 支持 Shadow DOM 内的普通 DOM；若找不到则回退到手动向上遍历
+    if (typeof el.closest === 'function') {
+      const hit = el.closest('input, textarea, [contenteditable]');
+      if (hit) return true;
+      // 兜底：isContentEditable 会继承，closest 可能漏掉 contenteditable="" 的情况
+      let cur = el;
+      while (cur) {
+        if (cur.isContentEditable) return true;
+        cur = cur.parentElement;
+      }
+      return false;
+    }
+    // 无 closest（如极旧环境）则手动遍历
+    let cur = el;
+    while (cur) {
+      const tag = cur.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || cur.isContentEditable) return true;
+      cur = cur.parentElement;
+    }
+    return false;
+  } catch (_) {
+    return false;
+  }
+}
+
+/**
  * 按 UTF-16 code unit 上限截断，但绝不在代理对（emoji / 生僻字）中间切断，
  * 否则会产生孤立高位代理，显示为 � 乱码。
  */
@@ -141,6 +177,9 @@ function processSelection() {
 
   const selection = window.getSelection();
   if (!selection || selection.rangeCount === 0) return;
+
+  // P2：补充对选区锚点所在元素的可编辑校验，覆盖未聚焦 contenteditable 场景
+  if (isSelectionInEditable(selection)) return;
 
   let text = selection.toString();
   if (!text) return;
@@ -202,18 +241,47 @@ function detectDarkSurrounding() {
     for (const el of candidates) {
       if (!el) continue;
       const bg = getComputedStyle(el).backgroundColor;
-      const m = bg && bg.match(/rgba?\(([^)]+)\)/);
+      if (!bg) continue;
+      // 支持 rgb/rgba/hsl/hsla/lab 等；对非 rgb 的回退：用临时元素归一到 rgb
+      let r, g, b, a = 1;
+      let m = bg.match(/rgba?\(\s*([^)]+)\)/i);
       if (m) {
         const parts = m[1].split(',').map(s => parseFloat(s.trim()));
-        // 透明背景不具参考价值，跳过
         if (parts.length >= 3 && (parts.length === 3 || parts[3] > 0.5)) {
-          const [r, g, b] = parts;
-          // 感知亮度（YIQ）
-          const luminance = (r * 299 + g * 587 + b * 114) / 1000;
-          if (luminance < 128) return true;
-          if (luminance >= 160) return false;
+          [r, g, b] = parts;
+        } else {
+          continue; // 透明背景不具参考价值
         }
+      } else if (/^hsla?\(/i.test(bg)) {
+        // hsl/hsla：直接取 lightness 判断（<50% 视为深色）
+        const hm = bg.match(/hsla?\(\s*[^,]+,\s*[^,]+,\s*([0-9.]+)%/i);
+        if (hm) {
+          const l = parseFloat(hm[1]);
+          if (l < 45) return true;
+          if (l > 65) return false;
+          continue;
+        }
+        // 解析失败则尝试用临时元素归一化为 rgb
+        try {
+          const tmp = document.createElement('div');
+          tmp.style.color = bg;
+          document.body.appendChild(tmp);
+          const rgb = getComputedStyle(tmp).color;
+          document.body.removeChild(tmp);
+          m = rgb && rgb.match(/rgba?\(\s*([^)]+)\)/i);
+          if (!m) continue;
+          const parts = m[1].split(',').map(s => parseFloat(s.trim()));
+          if (parts.length >= 3 && (parts.length === 3 || parts[3] > 0.5)) [r, g, b] = parts;
+          else continue;
+        } catch (_) { continue; }
+      } else {
+        // 其他颜色函数（lab, color-mix 等）暂按浅色处理，避免误判为深色
+        continue;
       }
+      // 感知亮度（YIQ）
+      const luminance = (r * 299 + g * 587 + b * 114) / 1000;
+      if (luminance < 128) return true;
+      if (luminance >= 160) return false;
     }
   } catch (_) { /* getComputedStyle 异常时默认浅色 */ }
 
