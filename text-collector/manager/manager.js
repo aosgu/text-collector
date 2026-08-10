@@ -5,10 +5,12 @@
 
 // ── 状态 ──
 let currentOffset = 0;
-const PAGE_SIZE = 50;
+const PAGE_SIZE = CONFIG.PAGE_SIZE;
 let totalCount = 0;
 let isLoading = false;
 let newRecordsCount = 0;
+// [L2] 使用模块作用域变量替代 window._newRecordTimer
+let newRecordTimer = null;
 
 // ── DOM ──
 const $list = document.getElementById('list');
@@ -84,8 +86,8 @@ async function loadMore() {
   // 更新计数和存储占用
   await updateRecordInfo();
 
-  // 存储警告
-  if (totalCount > 5000) {
+  // 存储警告（使用 CONFIG 常量）
+  if (totalCount > CONFIG.STORAGE_WARNING_THRESHOLD) {
     $storageWarning.classList.remove('hidden');
   } else {
     $storageWarning.classList.add('hidden');
@@ -410,9 +412,9 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
       $newRecordsHint.textContent = `🆕 新增了 ${newRecordsCount} 条记录`;
       $newRecordsHint.classList.remove('hidden');
 
-      // 3 秒后消失
-      clearTimeout(window._newRecordTimer);
-      window._newRecordTimer = setTimeout(() => {
+      // [L2] 使用模块作用域定时器替代 window._newRecordTimer
+      clearTimeout(newRecordTimer);
+      newRecordTimer = setTimeout(() => {
         $newRecordsHint.classList.add('hidden');
         newRecordsCount = 0;
       }, 3000);

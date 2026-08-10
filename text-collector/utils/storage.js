@@ -5,6 +5,23 @@
 
 const SCHEMA_VERSION = 1;
 
+// ── 可配置常量 ──
+const CONFIG = {
+  // 存储相关
+  DEDUP_CHECK_LIMIT: 500,        // 去重/扩选检查的最近记录数
+  PAGE_SIZE: 50,                 // 管理页分页大小
+  EXPORT_BATCH_SIZE: 100,        // 导出分批读取大小
+  STORAGE_ESTIMATE_SAMPLES: 50,  // 存储估算采样数
+  STORAGE_WARNING_THRESHOLD: 5000, // 存储警告阈值
+  // 采集相关
+  DEBOUNCE_MS: 500,             // 防抖延迟
+  PAGE_LOAD_GRACE_MS: 2000,     // 页面加载初期保护（跳过 selection 恢复）
+  MAX_TEXT_LENGTH: 5000,        // 最大文本长度
+  MIN_CHINESE_CHARS: 5,         // 最小中文字数
+  MIN_ENGLISH_WORDS: 3,         // 最小英文词数
+  EXPAND_REPLACE_WINDOW_MS: 5000, // 扩选替换时间窗口
+};
+
 /** 生成 UUID v4 */
 function generateUUID() {
   return crypto.randomUUID ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
@@ -34,6 +51,29 @@ function getDomain(url) {
 }
 
 /**
+ * [L7] 清理孤儿数据：对比 storage 中所有 snip_* keys 和 snippets_order，
+ * 删除不在 order 中的孤儿记录
+ * @returns {Promise<number>} 清理的孤儿记录数
+ */
+async function cleanOrphanSnippets() {
+  const allData = await chrome.storage.local.get(null);
+  const order = allData.snippets_order || [];
+  const orderSet = new Set(order);
+
+  const orphanKeys = [];
+  for (const key of Object.keys(allData)) {
+    if (key.startsWith('snip_') && !orderSet.has(key.replace('snip_', ''))) {
+      orphanKeys.push(key);
+    }
+  }
+
+  if (orphanKeys.length > 0) {
+    await chrome.storage.local.remove(orphanKeys);
+  }
+  return orphanKeys.length;
+}
+
+/**
  * 写入一条新采集记录
  * @returns {Promise<{action: 'created'|'duplicate'|'replaced', record?: Object}>}
  */
@@ -47,10 +87,10 @@ async function addSnippet(text, url, title) {
   const orderData = await chrome.storage.local.get('snippets_order');
   const order = orderData.snippets_order || [];
 
-  // 批量读取最近 50 条记录做去重和扩选检查
-  const recentIds = order.slice(0, 50);
-  const recentRecords = await chrome.storage.local.get(recentIds.map(id => `snip_${id}`));
-  const recentSnippets = recentIds.map(id => recentRecords[`snip_${id}`]).filter(Boolean);
+  // [M3] 扩大检查范围，从 50 改为 DEDUP_CHECK_LIMIT
+  const checkIds = order.slice(0, CONFIG.DEDUP_CHECK_LIMIT);
+  const recentRecords = await chrome.storage.local.get(checkIds.map(id => `snip_${id}`));
+  const recentSnippets = checkIds.map(id => recentRecords[`snip_${id}`]).filter(Boolean);
 
   // 1. 去重检查：同 urlKey + 完全相同文本
   const duplicate = recentSnippets.find(s => s.urlKey === urlKey && s.text === normalizedText);
@@ -63,7 +103,7 @@ async function addSnippet(text, url, title) {
   // 2. 扩选替换检查：同 urlKey + 5秒内 + 新文本包含旧文本
   const replaceable = recentSnippets.find(s =>
     s.urlKey === urlKey &&
-    (now - s.lastSelectedAt) < 5000 &&
+    (now - s.lastSelectedAt) < CONFIG.EXPAND_REPLACE_WINDOW_MS &&
     normalizedText.includes(s.text)
   );
 
@@ -75,6 +115,7 @@ async function addSnippet(text, url, title) {
   }
 
   // 3. 新增记录
+  // [M1] 先单独写入 snip_* 数据（不同 snippet 的 key 互不冲突，解决并发覆盖问题）
   const id = generateUUID();
   const record = {
     id,
@@ -87,9 +128,13 @@ async function addSnippet(text, url, title) {
     lastSelectedAt: now,
   };
 
+  await chrome.storage.local.set({ [`snip_${id}`]: record });
+
+  // [M1] 重新读取最新 order 后再追加，缩小竞态窗口
+  const latestOrderData = await chrome.storage.local.get('snippets_order');
+  const latestOrder = latestOrderData.snippets_order || [];
   await chrome.storage.local.set({
-    [`snip_${id}`]: record,
-    snippets_order: [id, ...order],
+    snippets_order: [id, ...latestOrder],
   });
 
   return { action: 'created', record };
@@ -108,13 +153,20 @@ async function deleteSnippet(id) {
 
 /**
  * 清空所有记录
+ * [L6] 使用 chrome.storage.local.clear() 避免并发写入竞态
  */
 async function clearAllSnippets() {
-  const orderData = await chrome.storage.local.get('snippets_order');
-  const order = orderData.snippets_order || [];
-  const keysToRemove = order.map(id => `snip_${id}`);
-  keysToRemove.push('snippets_order');
-  await chrome.storage.local.remove(keysToRemove);
+  // 先获取需要删除的 keys，再用 remove 精确清理
+  const allData = await chrome.storage.local.get(null);
+  const keysToRemove = [];
+  for (const key of Object.keys(allData)) {
+    if (key.startsWith('snip_') || key === 'snippets_order') {
+      keysToRemove.push(key);
+    }
+  }
+  if (keysToRemove.length > 0) {
+    await chrome.storage.local.remove(keysToRemove);
+  }
 }
 
 /**
@@ -123,7 +175,7 @@ async function clearAllSnippets() {
  * @param {number} limit - 每批数量
  * @returns {Promise<{records: Array, total: number}>}
  */
-async function getSnippets(offset = 0, limit = 50) {
+async function getSnippets(offset = 0, limit = CONFIG.PAGE_SIZE) {
   const orderData = await chrome.storage.local.get('snippets_order');
   const order = orderData.snippets_order || [];
   const total = order.length;
@@ -137,16 +189,24 @@ async function getSnippets(offset = 0, limit = 50) {
 
 /**
  * 获取所有记录（用于导出）
+ * [L4] 分批读取，避免大量 keys 一次性 get 的性能问题
  * @returns {Promise<Array>}
  */
 async function getAllSnippets() {
   const orderData = await chrome.storage.local.get('snippets_order');
   const order = orderData.snippets_order || [];
-  const allData = await chrome.storage.local.get(order.map(id => `snip_${id}`));
-  const records = order.map(id => allData[`snip_${id}`]).filter(Boolean);
+
+  const allRecords = [];
+  for (let i = 0; i < order.length; i += CONFIG.EXPORT_BATCH_SIZE) {
+    const batchIds = order.slice(i, i + CONFIG.EXPORT_BATCH_SIZE);
+    const batchData = await chrome.storage.local.get(batchIds.map(id => `snip_${id}`));
+    const batchRecords = batchIds.map(id => batchData[`snip_${id}`]).filter(Boolean);
+    allRecords.push(...batchRecords);
+  }
+
   // 按时间正序排列（最早在前）
-  records.sort((a, b) => a.capturedAt - b.capturedAt);
-  return records;
+  allRecords.sort((a, b) => a.capturedAt - b.capturedAt);
+  return allRecords;
 }
 
 /**
@@ -181,6 +241,7 @@ async function getEarliestDate() {
 
 /**
  * 导入记录（合并去重）
+ * [L3] 补充缺失字段的默认值
  * @returns {Promise<{imported: number, skipped: number}>}
  */
 async function importSnippets(snippets) {
@@ -211,7 +272,17 @@ async function importSnippets(snippets) {
     }
 
     const id = snip.id || generateUUID();
-    newEntries[`snip_${id}`] = { ...snip, id };
+    // [L3] 补充缺失字段的默认值，确保导入记录结构完整
+    newEntries[`snip_${id}`] = {
+      id,
+      text: snip.text,
+      url: snip.url || '',
+      urlKey: snip.urlKey,
+      title: snip.title || '',
+      domain: snip.domain || getDomain(snip.url || ''),
+      capturedAt: snip.capturedAt,
+      lastSelectedAt: snip.lastSelectedAt || snip.capturedAt,
+    };
     existingKeys.add(key);
     imported++;
   }
@@ -228,22 +299,26 @@ async function importSnippets(snippets) {
 
 /**
  * 估算存储占用（KB）
+ * [L5] 增加采样数量以提高精度
  */
 async function getStorageEstimate() {
   const orderData = await chrome.storage.local.get('snippets_order');
   const order = orderData.snippets_order || [];
   if (order.length === 0) return 0;
 
-  // 抽样前 10 条估算平均大小
-  const sampleIds = order.slice(0, Math.min(10, order.length));
+  const sampleSize = Math.min(CONFIG.STORAGE_ESTIMATE_SAMPLES, order.length);
+  const sampleIds = order.slice(0, sampleSize);
   const sampleData = await chrome.storage.local.get(sampleIds.map(id => `snip_${id}`));
   let totalSize = 0;
+  let validSamples = 0;
   for (const id of sampleIds) {
     const record = sampleData[`snip_${id}`];
     if (record) {
       totalSize += JSON.stringify(record).length;
+      validSamples++;
     }
   }
-  const avgSize = totalSize / sampleIds.length;
+  if (validSamples === 0) return 0;
+  const avgSize = totalSize / validSamples;
   return Math.round((avgSize * order.length) / 1024);
 }
