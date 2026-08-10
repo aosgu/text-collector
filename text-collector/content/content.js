@@ -56,7 +56,14 @@ function meetsLengthThreshold(text) {
 
 function isPureSymbol(text) {
   // 仅标点符号和空白
-  return /^[\s\p{P}\p{S}]+$/u.test(text);
+  // 优先使用 \p{} Unicode 属性（ES2018+，支持所有 Unicode 标点）
+  // 不支持时 fallback 到 ASCII + 常见全角/特殊符号，避免误判正常文本
+  try {
+    return /^[\s\p{P}\p{S}]+$/u.test(text);
+  } catch (_) {
+    // Fallback: ASCII 标点 + 全角中文标点 + 常见符号
+    return /^[\s!-/:-@\[-`{-~\u3000-\u303F\uFF00-\uFFEF\u2000-\u206F]+$/.test(text);
+  }
 }
 
 function isPureNumber(text) {
@@ -126,10 +133,11 @@ function processSelection() {
   if (!meetsLengthThreshold(text)) return;
   if (isPureSymbol(text) || isPureNumber(text) || isPureURL(text)) return;
 
+  // NFC 规范化必须在长度截断之前执行，避免在 Unicode 组合字符中间截断导致乱码
+  text = text.normalize('NFC');
   if (text.length > CONFIG.MAX_TEXT_LENGTH) {
     text = text.substring(0, CONFIG.MAX_TEXT_LENGTH);
   }
-  text = text.normalize('NFC');
 
   const url = location.href;
   const title = document.title || url;
