@@ -8,8 +8,10 @@
  *   （prependNewCards / renderLoadError，见下文对应说明）。
  *
  * 状态约定：currentOffset / totalCount / isLoading 等可变状态全部保留在
- * manager.js，本文件通过函数参数传入的 bridge（{ getState, commit,
- * setIgnoreAllOrderChanges } 回调集）读写，不在文件间共享可变变量。
+ * manager.js，本文件通过函数参数传入的 bridge 读写（getLoadedCount /
+ * getTotalCount / getLoading 等 getter，incrementLoaded / decrementLoaded /
+ * resetLoaded / setTotalCount / incrementTotal / decrementTotal / setLoading /
+ * setIgnoreOrderChanges 等 setter），不在文件间共享可变变量。
  * 创建卡片时用 textContent 渲染采集文本（内容来自任意网页，禁止 innerHTML）。
  */
 
@@ -26,21 +28,20 @@ const PAGE_SIZE = CONFIG.PAGE_SIZE;
 
 // ── 列表加载 ──
 async function loadFirstPage(bridge) {
-  bridge.commit({ currentOffset: 0 });
+  bridge.resetLoaded();
   $list.innerHTML = '';
   await loadMore(bridge);
 }
 
 async function loadMore(bridge) {
-  const st = bridge.getState();
-  if (st.isLoading) return;
-  bridge.commit({ isLoading: true });
+  if (bridge.getLoading()) return;
+  bridge.setLoading(true);
 
-  const { records, total } = await getSnippets(st.currentOffset, PAGE_SIZE);
-  const newOffset = st.currentOffset + records.length;
-  bridge.commit({ totalCount: total, currentOffset: newOffset });
+  const { records, total } = await getSnippets(bridge.getLoadedCount(), PAGE_SIZE);
+  bridge.setTotalCount(total);
+  bridge.incrementLoaded(records.length);
 
-  if (records.length === 0 && newOffset === 0) {
+  if (records.length === 0 && bridge.getLoadedCount() === 0) {
     $emptyState.classList.remove('hidden');
     $loadMore.classList.add('hidden');
   } else {
@@ -52,21 +53,21 @@ async function loadMore(bridge) {
     }
   }
 
-  if (newOffset < total) {
+  if (bridge.getLoadedCount() < bridge.getTotalCount()) {
     $loadMore.classList.remove('hidden');
   } else {
     $loadMore.classList.add('hidden');
   }
 
-  await updateRecordInfo(total);
+  await updateRecordInfo(bridge.getTotalCount());
 
-  if (total > CONFIG.STORAGE_WARNING_THRESHOLD) {
+  if (bridge.getTotalCount() > CONFIG.STORAGE_WARNING_THRESHOLD) {
     $storageWarning.classList.remove('hidden');
   } else {
     $storageWarning.classList.add('hidden');
   }
 
-  bridge.commit({ isLoading: false });
+  bridge.setLoading(false);
 }
 
 // ── 计数显示 ──
@@ -176,7 +177,7 @@ function createCard(record, bridge) {
 
 // ── 删除（带撤销） ──
 async function deleteRecord(record, card, bridge) {
-  const { getState, commit, setIgnoreAllOrderChanges } = bridge;
+  const { getTotalCount, getLoadedCount, incrementTotal, decrementTotal, decrementLoaded, setIgnoreOrderChanges } = bridge;
   const recordCopy = { ...record };
   const nextSibling = card.nextSibling;
   const parent = card.parentNode;
@@ -191,16 +192,13 @@ async function deleteRecord(record, card, bridge) {
 
   setTimeout(() => {
     card.remove();
-    const st = getState();
-    const newTotal = Math.max(0, st.totalCount - 1);
-    const newOffset = Math.max(0, st.currentOffset - 1);
-    // 已加载窗口收缩 1，避免后续 loadMore 从错误 offset 起读导致漏条/重条
-    commit({ totalCount: newTotal, currentOffset: newOffset });
-    updateRecordInfo(newTotal);
-    if (newTotal === 0) {
+    decrementTotal();  // totalCount = max(0, totalCount - 1)
+    decrementLoaded(); // 已加载窗口收缩 1，避免后续 loadMore 从错误 offset 起读导致漏条/重条
+    updateRecordInfo(getTotalCount());
+    if (getTotalCount() === 0) {
       $emptyState.classList.remove('hidden');
       $loadMore.classList.add('hidden');
-    } else if (newOffset < newTotal) {
+    } else if (getLoadedCount() < getTotalCount()) {
       $loadMore.classList.remove('hidden');
     }
   }, 180);
@@ -211,7 +209,7 @@ async function deleteRecord(record, card, bridge) {
     kind: 'info',
     actionText: '撤销',
     onAction: async () => {
-      setIgnoreAllOrderChanges(true);
+      setIgnoreOrderChanges(true);
       try {
         const id = recordCopy.id;
         await chrome.storage.local.set({ [`snip_${id}`]: recordCopy });
@@ -235,12 +233,11 @@ async function deleteRecord(record, card, bridge) {
           }
           applyTruncationCheck(restoredCard);
         }
-        const st2 = getState();
-        commit({ totalCount: st2.totalCount + 1 });
-        await updateRecordInfo(st2.totalCount + 1);
+        incrementTotal(); // totalCount + 1
+        await updateRecordInfo(getTotalCount());
         showToast('已恢复', { kind: 'success' });
       } finally {
-        setIgnoreAllOrderChanges(false);
+        setIgnoreOrderChanges(false);
       }
     },
     duration: 5000,

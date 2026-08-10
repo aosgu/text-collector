@@ -14,6 +14,11 @@
  * 状态约定：currentOffset / totalCount / isLoading / newRecordsCount /
  * newRecordTimer / ignoreAllOrderChanges 只在本文件内声明与读写；
  * 其他模块通过 listBridge（函数参数/回调）访问，不在模块间共享可变变量。
+ * 其中 currentOffset / totalCount / isLoading / ignoreAllOrderChanges 的
+ * 一切修改都收敛到本文件的命名函数（incrementLoaded / decrementLoaded /
+ * resetLoaded / setTotalCount / incrementTotal / decrementTotal /
+ * setLoading / setIgnoreOrderChanges），读取走 getLoadedCount /
+ * getTotalCount / getLoading / isIgnoreOrderChanges，便于全局检索改动点。
  *
  * 本文件只处理行为和 DOM 结构，所有视觉样式见 manager.css。
  * 采集记录必须使用 textContent 渲染（内容来自任意网页，禁止 innerHTML）。
@@ -31,24 +36,42 @@ let ignoreAllOrderChanges = false;
 
 // ── 状态读写通道 ──
 // 通过函数参数/回调把状态读写给 render.js 等模块，避免跨文件共享可变变量。
-function getListState() {
-  return { currentOffset, totalCount, isLoading };
-}
+// 对 currentOffset / totalCount / isLoading / ignoreAllOrderChanges 的一切修改
+// 都收敛到下面的命名函数里（incrementLoaded / decrementLoaded / resetLoaded /
+// setTotalCount / incrementTotal / decrementTotal / setLoading / setIgnoreOrderChanges），
+// 需要排查「什么时候会改这几个状态」时直接搜索这些函数名即可；
+// 读取统一走 get* / is* 命名 getter。
 
-function commitListState(patch) {
-  if (patch.currentOffset !== undefined) currentOffset = patch.currentOffset;
-  if (patch.totalCount !== undefined) totalCount = patch.totalCount;
-  if (patch.isLoading !== undefined) isLoading = patch.isLoading;
-}
+function getLoadedCount() { return currentOffset; }
+function getTotalCount() { return totalCount; }
+function getLoading() { return isLoading; }
+function isIgnoreOrderChanges() { return ignoreAllOrderChanges; }
 
-function setIgnoreAllOrderChanges(value) {
-  ignoreAllOrderChanges = value;
-}
+/** currentOffset += n（默认 1）：loadMore 翻页、onChanged 每插入一张新卡片 */
+function incrementLoaded(n = 1) { currentOffset += n; }
+/** currentOffset = max(0, currentOffset - n)（默认 1）：删除后收缩已加载窗口，避免漏条/重条 */
+function decrementLoaded(n = 1) { currentOffset = Math.max(0, currentOffset - n); }
+/** currentOffset = 0：首屏 / 清空后重新加载 */
+function resetLoaded() { currentOffset = 0; }
+
+/** totalCount = n：loadMore / onChanged 拿到新的总数时 */
+function setTotalCount(n) { totalCount = n; }
+/** totalCount += n（默认 1）：删除撤销恢复记录 */
+function incrementTotal(n = 1) { totalCount += n; }
+/** totalCount = max(0, totalCount - n)（默认 1）：删除记录 */
+function decrementTotal(n = 1) { totalCount = Math.max(0, totalCount - n); }
+
+/** isLoading = bool：loadMore 开始 / 结束 */
+function setLoading(bool) { isLoading = bool; }
+
+/** ignoreAllOrderChanges = bool：删除撤销 / 清空 / 导入的 try-finally 包裹 */
+function setIgnoreOrderChanges(bool) { ignoreAllOrderChanges = bool; }
 
 const listBridge = {
-  getState: getListState,
-  commit: commitListState,
-  setIgnoreAllOrderChanges,
+  getLoadedCount, getTotalCount, getLoading,
+  incrementLoaded, decrementLoaded, resetLoaded,
+  setTotalCount, incrementTotal, decrementTotal,
+  setLoading, setIgnoreOrderChanges,
 };
 
 // ── DOM（事件绑定 / onChanged 需要；渲染相关元素由各模块自持） ──
@@ -104,17 +127,17 @@ async function handleClearAll() {
 
   showConfirmModal(
     '清空全部记录',
-    `确定清空全部 ${totalCount} 条记录？` +
+    `确定清空全部 ${getTotalCount()} 条记录？` +
       (dateStr ? `最早记录于 ${dateStr}。` : '') +
       '此操作不可撤销。',
     async () => {
-      ignoreAllOrderChanges = true;
+      setIgnoreOrderChanges(true);
       try {
         await clearAllSnippets();
         await loadFirstPage(listBridge);
         showToast('已清空', { kind: 'success' });
       } finally {
-        ignoreAllOrderChanges = false;
+        setIgnoreOrderChanges(false);
       }
     }
   );
@@ -129,7 +152,7 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
   }
 
   if (changes.snippets_order) {
-    if (ignoreAllOrderChanges) return;
+    if (isIgnoreOrderChanges()) return;
 
     const newOrder = changes.snippets_order.newValue || [];
     const oldOrder = changes.snippets_order.oldValue || [];
@@ -139,15 +162,15 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
       if (newIds.length === 0) return;
 
       newRecordsCount += newIds.length;
-      totalCount = newOrder.length;
-      updateRecordInfo(totalCount);
+      setTotalCount(newOrder.length);
+      updateRecordInfo(getTotalCount());
 
       chrome.storage.local
         .get(newIds.map(id => `snip_${id}`))
         .then(recordsData => {
           const sortedNewIds = newOrder.filter(id => newIds.includes(id));
           // newOrder 中越靠前越新；prependNewCards 内从后往前 prepend，最新在顶部
-          prependNewCards(recordsData, sortedNewIds, listBridge, () => { currentOffset++; });
+          prependNewCards(recordsData, sortedNewIds, listBridge, () => { incrementLoaded(); });
         });
 
       $newRecordsHint.textContent = `新增了 ${newRecordsCount} 条记录`;
@@ -165,8 +188,8 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
 // ── 导入（change 事件：选择文件后交给 import-export.js 处理） ──
 $fileInput.addEventListener('change', async (e) => {
   await handleImportFileChange(e.target.files[0], {
-    onBeforeImport: () => { ignoreAllOrderChanges = true; },
-    onAfterImport: () => { ignoreAllOrderChanges = false; },
+    onBeforeImport: () => { setIgnoreOrderChanges(true); },
+    onAfterImport: () => { setIgnoreOrderChanges(false); },
     onImported: () => loadFirstPage(listBridge),
   });
 });
