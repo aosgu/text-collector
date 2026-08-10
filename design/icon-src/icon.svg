@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="128" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#f1ede4"/>
+    </linearGradient>
+  </defs>
+  <!-- rounded square background with subtle warm white gradient and border -->
+  <rect x="8" y="8" width="112" height="112" rx="26" fill="url(#bg)"/>
+  <rect x="8.5" y="8.5" width="111" height="111" rx="25.5" fill="none" stroke="#d9d2c2" stroke-width="1"/>
+  <!-- left bracket -->
+  <path d="M48 38c-6.6 0-12 5.4-12 12v28c0 6.6 5.4 12 12 12"
+        fill="none" stroke="#2f6fed" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- right bracket -->
+  <path d="M80 38c6.6 0 12 5.4 12 12v28c0 6.6-5.4 12-12 12"
+        fill="none" stroke="#2f6fed" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- middle dash (selected line) -->
+  <line x1="53" y1="64" x2="75" y2="64" stroke="#1c1d20" stroke-width="7" stroke-linecap="round"/>
+</svg>

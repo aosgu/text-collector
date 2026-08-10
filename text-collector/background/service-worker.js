@@ -1,71 +1,72 @@
 /**
- * service-worker.js — Background Service Worker
- * 安装初始化 + 点击图标打开管理页 + badge 状态管理 + 快捷键响应
+ * service-worker.js — Background Service Worker (MV3)
+ *
+ * 职责：
+ *  - 首次安装时初始化 schemaVersion / collectEnabled
+ *  - 点击工具栏图标：打开或聚焦管理页（manifest 未设 default_popup，故 onClicked 会触发）
+ *  - Ctrl+Shift+S 切换采集开关
+ *  - 开关变化时同步工具栏 badge（关闭时显示 OFF）
+ *
+ * 采集逻辑在 content script 里直接读写 storage，本文件不做中转。
  */
 
 const MANAGER_URL = chrome.runtime.getURL('manager/manager.html');
 
-// ── 安装初始化 ──
 chrome.runtime.onInstalled.addListener(async () => {
-  // 初始化 schemaVersion
   const data = await chrome.storage.local.get(['schemaVersion', 'collectEnabled']);
   const updates = {};
 
-  if (data.schemaVersion === undefined) {
-    updates.schemaVersion = 1;
-  }
-  if (data.collectEnabled === undefined) {
-    updates.collectEnabled = true;
-  }
+  if (data.schemaVersion === undefined) updates.schemaVersion = 1;
+  if (data.collectEnabled === undefined) updates.collectEnabled = true;
 
   if (Object.keys(updates).length > 0) {
     await chrome.storage.local.set(updates);
   }
 
-  // 更新 badge
+  // 安装后立刻根据当前开关状态刷新一次 badge
   await updateBadge(data.collectEnabled !== false);
 });
 
-// ── 点击图标打开管理页 ──
 chrome.action.onClicked.addListener(async () => {
-  // 检查是否已有管理页打开
+  // 若管理页已经打开，直接切过去，避免重复开 tab
   const tabs = await chrome.tabs.query({ url: MANAGER_URL });
   if (tabs.length > 0) {
-    // 切换到已打开的管理页
     await chrome.tabs.update(tabs[0].id, { active: true });
-    await chrome.windows.update(tabs[0].windowId, { focused: true });
+    if (tabs[0].windowId != null) {
+      await chrome.windows.update(tabs[0].windowId, { focused: true });
+    }
   } else {
     await chrome.tabs.create({ url: MANAGER_URL });
   }
 });
 
-// ── 快捷键：切换采集开关 ──
 chrome.commands.onCommand.addListener(async (command) => {
   if (command !== 'toggle-collect') return;
 
   const data = await chrome.storage.local.get('collectEnabled');
-  const current = data.collectEnabled !== false;
+  const current = data.collectEnabled !== false; // 未设置视为开启
   const newValue = !current;
-
   await chrome.storage.local.set({ collectEnabled: newValue });
   await updateBadge(newValue);
 });
 
-// ── 监听开关变化，更新 badge ──
 chrome.storage.onChanged.addListener((changes, areaName) => {
   if (areaName !== 'local') return;
   if (changes.collectEnabled) {
-    const enabled = changes.collectEnabled.newValue !== false;
-    updateBadge(enabled);
+    updateBadge(changes.collectEnabled.newValue !== false);
   }
 });
 
-// ── Badge 更新 ──
+/**
+ * 更新工具栏 badge。
+ * 开启 → 不显示 badge（图标本身足够辨识）；关闭 → 灰色「OFF」提醒用户当前不采集。
+ */
 async function updateBadge(enabled) {
   if (enabled) {
     await chrome.action.setBadgeText({ text: '' });
   } else {
     await chrome.action.setBadgeText({ text: 'OFF' });
-    await chrome.action.setBadgeBackgroundColor({ color: '#888888' });
+    await chrome.action.setBadgeBackgroundColor({ color: '#9a9890' });
+    await chrome.action.setBadgeTextColor?.({ color: '#ffffff' });
   }
 }

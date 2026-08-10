@@ -1,23 +1,29 @@
 /**
  * manager.js — 管理页逻辑
- * 列表渲染 / 复制 / 删除 / 撤销 / 导出 / 导入 / 清空 / 开关 / 实时更新 / 滚动加载
+ *
+ * 负责：采集记录的列表渲染、分页、复制、删除（含撤销）、
+ * 导出（TXT/JSON）、导入、清空、采集开关、storage 实时变更订阅。
+ *
+ * 本文件只处理行为和 DOM 结构，所有视觉样式见 manager.css。
+ * 采集记录必须使用 textContent 渲染（内容来自任意网页，禁止 innerHTML）。
  */
 
 // ── 状态 ──
+// 当前页已加载的条数；storage 实时新增时同步递增，避免后续分页重复或遗漏
 let currentOffset = 0;
 const PAGE_SIZE = CONFIG.PAGE_SIZE;
 let totalCount = 0;
 let isLoading = false;
 let newRecordsCount = 0;
-// [L2] 使用模块作用域变量替代 window._newRecordTimer
 let newRecordTimer = null;
-// 并发及撤销保护：若为 true 则在 onChanged 中忽略 snippets_order 变化
+// 本地修改（删除/清空/导入/撤销）期间置为 true，抑制 onChanged 的重复追加
 let ignoreAllOrderChanges = false;
 
 // ── DOM ──
 const $list = document.getElementById('list');
 const $emptyState = document.getElementById('empty-state');
-const $recordCount = document.getElementById('record-count');
+const $pageSub = document.getElementById('page-sub');
+const $toolbarCount = document.getElementById('toolbar-count');
 const $loadMore = document.getElementById('load-more');
 const $btnLoadMore = document.getElementById('btn-load-more');
 const $btnClear = document.getElementById('btn-clear');
@@ -32,7 +38,7 @@ const $fileInput = document.getElementById('file-input');
 
 // ── 初始化 ──
 async function init() {
-  await adoptOrphanSnippets(); // 自动收领孤儿数据，恢复并发写入可能遗漏的记录
+  await adoptOrphanSnippets();
   await renderToggle();
   await loadFirstPage();
   setupListeners();
@@ -46,11 +52,13 @@ async function renderToggle() {
 
 function updateToggleUI(enabled) {
   if (enabled) {
+    $collectToggle.classList.add('on');
     $collectToggle.classList.remove('off');
-    $collectToggle.querySelector('.toggle-state').textContent = '开';
+    $collectToggle.setAttribute('aria-checked', 'true');
   } else {
+    $collectToggle.classList.remove('on');
     $collectToggle.classList.add('off');
-    $collectToggle.querySelector('.toggle-state').textContent = '关';
+    $collectToggle.setAttribute('aria-checked', 'false');
   }
 }
 
@@ -77,29 +85,18 @@ async function loadMore() {
     for (const record of records) {
       const card = createCard(record);
       $list.appendChild(card);
-
-      // [Truncation Check] 检查文本行数是否超出 3 行截断。若未超出，则隐藏「展开」按钮
-      const textEl = card.querySelector('.card-text');
-      const expandEl = card.querySelector('.card-expand');
-      if (textEl && expandEl) {
-        if (textEl.scrollHeight <= textEl.clientHeight) {
-          expandEl.style.display = 'none';
-        }
-      }
+      applyTruncationCheck(card);
     }
   }
 
-  // 显示/隐藏加载更多
   if (currentOffset < totalCount) {
     $loadMore.classList.remove('hidden');
   } else {
     $loadMore.classList.add('hidden');
   }
 
-  // 更新计数和存储占用
   await updateRecordInfo();
 
-  // 存储警告（使用 CONFIG 常量）
   if (totalCount > CONFIG.STORAGE_WARNING_THRESHOLD) {
     $storageWarning.classList.remove('hidden');
   } else {
@@ -109,55 +106,95 @@ async function loadMore() {
   isLoading = false;
 }
 
-// ── 更新记录计数 ──
+// ── 计数显示 ──
+// 页面大标题下显示完整描述（条数 / 占用 KB / 排序方式），
+// 顶部 brand 旁显示极简等宽条数，滚动列表时也能看到。
 async function updateRecordInfo() {
   const sizeKB = await getStorageEstimate();
-  $recordCount.textContent = `共 ${totalCount} 条 · 占用约 ${sizeKB} KB`;
+  $pageSub.innerHTML =
+    `共 ${totalCount} 条 <span class="sep">/</span> 占用约 ${sizeKB} KB <span class="sep">/</span> 最新在前`;
+  $toolbarCount.textContent = totalCount > 0 ? `${totalCount} snippets` : '';
 }
 
-// ── 创建卡片 ──
+/**
+ * 判断卡片文本是否被 -webkit-line-clamp 截断，未截断则隐藏「展开」按钮。
+ * 必须在卡片插入 DOM 后调用，否则 scrollHeight/clientHeight 均为 0。
+ */
+function applyTruncationCheck(card) {
+  const textEl = card.querySelector('.card-text');
+  const expandEl = card.querySelector('.card-expand');
+  if (textEl && expandEl) {
+    if (textEl.scrollHeight <= textEl.clientHeight + 1) {
+      expandEl.style.display = 'none';
+    } else {
+      expandEl.style.display = '';
+    }
+  }
+}
+
+// ── 内联 SVG 图标（硬编码常量，唯一允许 innerHTML 的地方） ──
+const ICON_TRASH =
+  '<svg viewBox="0 0 16 16" fill="none" aria-hidden="true">' +
+  '<path d="M3 4h10M6.5 4V2.5h3V4M5 6.5v5m6-5v5M4 4l.6 8.5a1 1 0 001 .9h4.8a1 1 0 001-.9L12 4" ' +
+  'stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+const ICON_CHECK =
+  '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">' +
+  '<path d="M3 8.5l3.2 3L13 4.5" stroke="currentColor" stroke-width="2" ' +
+  'stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+const ICON_INFO =
+  '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">' +
+  '<circle cx="8" cy="8" r="5.5" stroke="currentColor" stroke-width="1.6"/>' +
+  '<path d="M8 7.2v3.3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>' +
+  '<circle cx="8" cy="5.4" r="0.9" fill="currentColor"/></svg>';
+
+const ICON_ALERT =
+  '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">' +
+  '<path d="M8 3.2v5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>' +
+  '<circle cx="8" cy="11.4" r="0.9" fill="currentColor"/></svg>';
+
+/**
+ * 创建一张记录卡片。
+ * 点击卡片文本 → 复制；点击「展开/收起」→ 切换截断；点击垃圾桶 → 删除。
+ * 所有采集文本通过 textContent 渲染，防止 XSS。
+ */
 function createCard(record) {
-  const card = document.createElement('div');
+  const card = document.createElement('article');
   card.className = 'card';
   card.dataset.id = record.id;
 
-  // 文本区域
   const textEl = document.createElement('div');
   textEl.className = 'card-text';
-  textEl.textContent = record.text; // 安全规则：textContent
-
-  // 点击复制
+  textEl.textContent = record.text; // 安全：textContent，禁止改为 innerHTML
   textEl.addEventListener('click', () => {
     copyToClipboard(record.text);
     card.classList.add('card-copied');
-    setTimeout(() => card.classList.remove('card-copied'), 400);
-    showToast('已复制');
+    setTimeout(() => card.classList.remove('card-copied'), 500);
+    showToast('已复制', { kind: 'success' });
   });
-
   card.appendChild(textEl);
 
-  // 展开/收起
   const expandEl = document.createElement('span');
   expandEl.className = 'card-expand';
-  expandEl.textContent = '展开';
+  expandEl.textContent = '展开 ↓';
   expandEl.addEventListener('click', (e) => {
     e.stopPropagation();
-    if (card.classList.contains('expanded')) {
-      card.classList.remove('expanded');
-      expandEl.textContent = '展开';
-    } else {
-      card.classList.add('expanded');
-      expandEl.textContent = '收起';
-    }
+    const expanded = card.classList.toggle('expanded');
+    expandEl.textContent = expanded ? '收起 ↑' : '展开 ↓';
   });
   card.appendChild(expandEl);
 
-  // 删除按钮
+  // 删除按钮：hover 时出现（移动端 CSS 中常驻）；用垃圾桶图标而非 ×，避免被误认为「关闭」
   const deleteBtn = document.createElement('button');
   deleteBtn.className = 'card-delete';
   deleteBtn.title = '删除';
-  deleteBtn.innerHTML = '<svg viewBox="0 0 16 16" fill="none"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>';
-  deleteBtn.addEventListener('click', () => deleteRecord(record, card));
+  deleteBtn.setAttribute('aria-label', '删除这条记录');
+  deleteBtn.innerHTML = ICON_TRASH;
+  deleteBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    deleteRecord(record, card);
+  });
   card.appendChild(deleteBtn);
 
   return card;
@@ -165,132 +202,145 @@ function createCard(record) {
 
 // ── 删除（带撤销） ──
 async function deleteRecord(record, card) {
-  // 保存记录副本用于撤销
   const recordCopy = { ...record };
-
-  // 记录其原先在 DOM 中的位置，用于原位恢复，防止刷新页面导致滚动丢失
   const nextSibling = card.nextSibling;
   const parent = card.parentNode;
 
-  // 记录删除前在 snippets_order 中的索引位置
   const orderData = await chrome.storage.local.get('snippets_order');
   const order = orderData.snippets_order || [];
   const originalIndex = order.indexOf(record.id);
 
-  // 立即从界面移除
-  card.style.transition = 'opacity 0.2s, transform 0.2s';
+  card.style.transition = 'opacity .18s ease, transform .18s ease';
   card.style.opacity = '0';
-  card.style.transform = 'translateX(-20px)';
+  card.style.transform = 'translateX(-12px)';
 
   setTimeout(() => {
     card.remove();
     totalCount--;
     updateRecordInfo();
-    // [Bug Fix] 若全部记录删除完毕，则显示空状态提示
     if (totalCount === 0) {
       $emptyState.classList.remove('hidden');
       $loadMore.classList.add('hidden');
     }
-  }, 200);
+  }, 180);
 
-  // 从 storage 删除
   await deleteSnippet(record.id);
 
-  // 显示撤销 toast
-  showToast('已删除', '撤销', async () => {
-    ignoreAllOrderChanges = true; // 开启保护，防止 onChanged 监听器触发重复追加
+  showToast('已删除', {
+    kind: 'info',
+    actionText: '撤销',
+    onAction: async () => {
+      ignoreAllOrderChanges = true;
+      try {
+        const id = recordCopy.id;
+        await chrome.storage.local.set({ [`snip_${id}`]: recordCopy });
 
-    // 1. 恢复记录内容
-    const id = recordCopy.id;
-    await chrome.storage.local.set({
-      [`snip_${id}`]: recordCopy,
-    });
-
-    // 2. 恢复其在 snippets_order 中的原始索引
-    const currentOrderData = await chrome.storage.local.get('snippets_order');
-    let currentOrder = currentOrderData.snippets_order || [];
-    if (originalIndex !== -1 && originalIndex <= currentOrder.length) {
-      currentOrder.splice(originalIndex, 0, id);
-    } else {
-      currentOrder = [id, ...currentOrder];
-    }
-    await chrome.storage.local.set({ snippets_order: currentOrder });
-
-    // 3. 在原 DOM 位置平滑恢复 card
-    const restoredCard = createCard(recordCopy);
-    if (parent) {
-      $emptyState.classList.add('hidden'); // 恢复时必定非空，隐藏空状态
-      if (nextSibling && nextSibling.parentNode === parent) {
-        parent.insertBefore(restoredCard, nextSibling);
-      } else {
-        parent.appendChild(restoredCard);
-      }
-
-      // 4. 对恢复的 card 执行截断检查
-      const textEl = restoredCard.querySelector('.card-text');
-      const expandEl = restoredCard.querySelector('.card-expand');
-      if (textEl && expandEl) {
-        if (textEl.scrollHeight <= textEl.clientHeight) {
-          expandEl.style.display = 'none';
+        const currentOrderData = await chrome.storage.local.get('snippets_order');
+        let currentOrder = currentOrderData.snippets_order || [];
+        if (originalIndex !== -1 && originalIndex <= currentOrder.length) {
+          currentOrder.splice(originalIndex, 0, id);
+        } else {
+          currentOrder = [id, ...currentOrder];
         }
-      }
-    }
+        await chrome.storage.local.set({ snippets_order: currentOrder });
 
-    totalCount++;
-    await updateRecordInfo();
-    ignoreAllOrderChanges = false; // 关闭保护
-    showToast('已恢复');
+        const restoredCard = createCard(recordCopy);
+        if (parent) {
+          $emptyState.classList.add('hidden');
+          if (nextSibling && nextSibling.parentNode === parent) {
+            parent.insertBefore(restoredCard, nextSibling);
+          } else {
+            parent.appendChild(restoredCard);
+          }
+          applyTruncationCheck(restoredCard);
+        }
+        totalCount++;
+        await updateRecordInfo();
+        showToast('已恢复', { kind: 'success' });
+      } finally {
+        ignoreAllOrderChanges = false;
+      }
+    },
+    duration: 5000,
   });
 }
 
-// ── 复制到剪贴板 ──
+// ── 复制到剪贴板（带 execCommand 兜底） ──
 function copyToClipboard(text) {
   navigator.clipboard.writeText(text).catch(() => {
-    // 降级方案
-    const textarea = document.createElement('textarea');
-    textarea.value = text;
-    textarea.style.position = 'fixed';
-    textarea.style.opacity = '0';
-    document.body.appendChild(textarea);
-    textarea.select();
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
     document.execCommand('copy');
-    textarea.remove();
+    ta.remove();
   });
 }
 
-// ── Toast ──
-function showToast(message, actionText, actionCallback) {
+// ── Toast：单实例，新 toast 会顶掉上一条 ──
+let currentToastEl = null;
+
+/**
+ * 显示一条 toast。
+ * @param {string} message
+ * @param {object} [opts]
+ * @param {'success'|'info'|'danger'} [opts.kind='info']
+ * @param {string} [opts.actionText]     右侧操作按钮文案（如「撤销」）
+ * @param {Function} [opts.onAction]     操作按钮回调
+ * @param {number} [opts.duration]       自动消失时长（ms），有操作按钮默认 5s，否则 1.6s
+ */
+function showToast(message, opts = {}) {
+  const {
+    kind = 'info',
+    actionText = null,
+    onAction = null,
+    duration = actionText ? 5000 : 1600,
+  } = opts;
+
+  if (currentToastEl && currentToastEl.parentNode) {
+    currentToastEl.parentNode.removeChild(currentToastEl);
+  }
+
   const toast = document.createElement('div');
   toast.className = 'toast';
+
+  const badge = document.createElement('span');
+  badge.className = `toast-badge is-${kind}`;
+  if (kind === 'success') badge.innerHTML = ICON_CHECK;
+  else if (kind === 'danger') badge.innerHTML = ICON_ALERT;
+  else badge.innerHTML = ICON_INFO;
+  toast.appendChild(badge);
 
   const text = document.createElement('span');
   text.textContent = message;
   toast.appendChild(text);
 
-  if (actionText) {
+  if (actionText && typeof onAction === 'function') {
     const action = document.createElement('span');
     action.className = 'toast-action';
     action.textContent = actionText;
     action.addEventListener('click', () => {
-      if (actionCallback) actionCallback();
-      toast.classList.remove('show');
-      setTimeout(() => toast.remove(), 200);
+      onAction();
+      dismiss(toast);
     });
     toast.appendChild(action);
   }
 
   $toastContainer.appendChild(toast);
+  currentToastEl = toast;
+  requestAnimationFrame(() => toast.classList.add('show'));
 
-  requestAnimationFrame(() => {
-    toast.classList.add('show');
-  });
+  const timer = setTimeout(() => dismiss(toast), duration);
+  toast._dismissTimer = timer;
+}
 
-  // 5 秒（有操作按钮）或 1.5 秒（无按钮）后消失
-  const duration = actionText ? 5000 : 1500;
-  setTimeout(() => {
-    toast.classList.remove('show');
-    setTimeout(() => toast.remove(), 200);
-  }, duration);
+function dismiss(toast) {
+  if (toast._dismissTimer) clearTimeout(toast._dismissTimer);
+  if (currentToastEl === toast) currentToastEl = null;
+  toast.classList.remove('show');
+  setTimeout(() => toast.remove(), 200);
 }
 
 // ── 清空全部 ──
@@ -302,13 +352,15 @@ async function handleClearAll() {
 
   showConfirmModal(
     '清空全部记录',
-    `确定清空全部 ${totalCount} 条记录？${dateStr ? `最早记录于 ${dateStr}。` : ''}此操作不可撤销。`,
+    `确定清空全部 ${totalCount} 条记录？` +
+      (dateStr ? `最早记录于 ${dateStr}。` : '') +
+      '此操作不可撤销。',
     async () => {
       ignoreAllOrderChanges = true;
       try {
         await clearAllSnippets();
         await loadFirstPage();
-        showToast('已清空');
+        showToast('已清空', { kind: 'success' });
       } finally {
         ignoreAllOrderChanges = false;
       }
@@ -316,10 +368,26 @@ async function handleClearAll() {
   );
 }
 
-// ── 确认弹窗 ──
+// ── 确认弹窗（Esc 取消 / Enter 确认 / 点遮罩关闭） ──
 function showConfirmModal(title, body, onConfirm) {
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
+
+  const close = () => {
+    overlay.remove();
+    document.removeEventListener('keydown', onKey);
+  };
+
+  const onKey = (e) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      close();
+    } else if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      close();
+      if (onConfirm) onConfirm();
+    }
+  };
 
   const modal = document.createElement('div');
   modal.className = 'modal';
@@ -336,17 +404,15 @@ function showConfirmModal(title, body, onConfirm) {
   actions.className = 'modal-actions';
 
   const cancelBtn = document.createElement('button');
-  cancelBtn.className = 'modal-btn modal-btn-cancel';
+  cancelBtn.className = 'btn';
   cancelBtn.textContent = '取消';
-  cancelBtn.addEventListener('click', () => {
-    overlay.remove();
-  });
+  cancelBtn.addEventListener('click', close);
 
   const confirmBtn = document.createElement('button');
-  confirmBtn.className = 'modal-btn modal-btn-confirm';
+  confirmBtn.className = 'btn btn-primary';
   confirmBtn.textContent = '确定';
   confirmBtn.addEventListener('click', () => {
-    overlay.remove();
+    close();
     if (onConfirm) onConfirm();
   });
 
@@ -358,23 +424,24 @@ function showConfirmModal(title, body, onConfirm) {
   overlay.appendChild(modal);
   document.body.appendChild(overlay);
 
-  // 点击遮罩关闭
+  // 点遮罩关闭（点 modal 内部不关闭）
   overlay.addEventListener('click', (e) => {
-    if (e.target === overlay) overlay.remove();
+    if (e.target === overlay) close();
   });
+
+  // 把焦点交给「确定」，方便键盘用户直接 Enter 确认
+  setTimeout(() => confirmBtn.focus(), 0);
+  document.addEventListener('keydown', onKey);
 }
 
-// ── 导出 ──
+// ── 导出为 TXT（UTF-8 BOM）或 JSON ──
 async function handleExport(format) {
   const records = await getAllSnippets();
   const dateStr = new Date().toISOString().slice(0, 10);
 
   if (format === 'txt') {
-    // 纯文本导出：仅文本内容，每条之间一个空行
     const texts = records.map(r => r.text);
     const content = texts.join('\n\n');
-
-    // UTF-8 with BOM
     const bom = '\uFEFF';
     const blob = new Blob([bom + content], { type: 'text/plain;charset=utf-8' });
     downloadBlob(blob, `snippets_${dateStr}.txt`);
@@ -389,7 +456,7 @@ async function handleExport(format) {
     downloadBlob(blob, `snippets_${dateStr}.json`);
   }
 
-  showToast(`已导出 ${records.length} 条`);
+  showToast(`已导出 ${records.length} 条`, { kind: 'success' });
 }
 
 function downloadBlob(blob, filename) {
@@ -417,26 +484,33 @@ $fileInput.addEventListener('change', async (e) => {
     const data = JSON.parse(text);
 
     if (!data.schemaVersion || !Array.isArray(data.snippets)) {
-      showToast('文件格式不正确');
+      showToast('文件格式不正确', { kind: 'danger' });
       return;
     }
-
     if (data.schemaVersion > SCHEMA_VERSION) {
-      showToast(`文件版本(v${data.schemaVersion})高于当前支持版本(v${SCHEMA_VERSION})`);
+      showToast(
+        `文件版本 (v${data.schemaVersion}) 高于当前支持版本 (v${SCHEMA_VERSION})`,
+        { kind: 'danger' }
+      );
       return;
     }
 
     ignoreAllOrderChanges = true;
-    const result = await importSnippets(data.snippets);
-    await loadFirstPage();
-    showToast(`导入了 ${result.imported} 条，跳过 ${result.skipped} 条`);
+    try {
+      const result = await importSnippets(data.snippets);
+      await loadFirstPage();
+      showToast(
+        `导入了 ${result.imported} 条，跳过 ${result.skipped} 条`,
+        { kind: result.imported > 0 ? 'success' : 'info' }
+      );
+    } finally {
+      ignoreAllOrderChanges = false;
+    }
   } catch (err) {
-    showToast('导入失败：文件解析错误');
+    showToast('导入失败：文件解析错误', { kind: 'danger' });
   } finally {
-    ignoreAllOrderChanges = false;
+    $fileInput.value = '';
   }
-
-  $fileInput.value = '';
 });
 
 // ── 开关切换 ──
@@ -447,69 +521,49 @@ async function handleToggle() {
   updateToggleUI(newValue);
 }
 
-// ── 实时更新：监听 storage 变化 ──
+// ── storage 实时变更：开关同步 + 新记录实时追加到列表头部 ──
 chrome.storage.onChanged.addListener((changes, areaName) => {
   if (areaName !== 'local') return;
 
-  // 开关变化
   if (changes.collectEnabled) {
     updateToggleUI(changes.collectEnabled.newValue !== false);
   }
 
-  // 新记录
   if (changes.snippets_order) {
-    // 若开启了本地变更忽略保护，直接跳过处理
     if (ignoreAllOrderChanges) return;
 
     const newOrder = changes.snippets_order.newValue || [];
     const oldOrder = changes.snippets_order.oldValue || [];
 
     if (newOrder.length > oldOrder.length) {
-      // 有新记录
       const newIds = newOrder.filter(id => !oldOrder.includes(id));
       if (newIds.length === 0) return;
 
       newRecordsCount += newIds.length;
-
-      // 更新计数
       totalCount = newOrder.length;
       updateRecordInfo();
 
-      // [PRD 自动追加 + 提示] 获取新记录的详细信息并追加到头部
-      chrome.storage.local.get(newIds.map(id => `snip_${id}`)).then(recordsData => {
-        $emptyState.classList.add('hidden'); // 新增时必定非空，隐藏空状态
-
-        // 保持新记录的相对时间顺序（newOrder 中最新在前，所以我们要按 newOrder 中的顺序把它们 prepend 到 DOM 中）
-        const sortedNewIds = newOrder.filter(id => newIds.includes(id));
-
-        // 从后往前 prepend，保证最新的一条在最顶部
-        for (let i = sortedNewIds.length - 1; i >= 0; i--) {
-          const id = sortedNewIds[i];
-          const record = recordsData[`snip_${id}`];
-          if (record) {
-            const newCard = createCard(record);
-            $list.insertBefore(newCard, $list.firstChild);
-
-            // 对新追加的 card 执行截断检查
-            const textEl = newCard.querySelector('.card-text');
-            const expandEl = newCard.querySelector('.card-expand');
-            if (textEl && expandEl) {
-              if (textEl.scrollHeight <= textEl.clientHeight) {
-                expandEl.style.display = 'none';
-              }
+      chrome.storage.local
+        .get(newIds.map(id => `snip_${id}`))
+        .then(recordsData => {
+          $emptyState.classList.add('hidden');
+          const sortedNewIds = newOrder.filter(id => newIds.includes(id));
+          // newOrder 中越靠前越新；从后往前 prepend，保证最终顺序最新在顶部
+          for (let i = sortedNewIds.length - 1; i >= 0; i--) {
+            const id = sortedNewIds[i];
+            const record = recordsData[`snip_${id}`];
+            if (record) {
+              const newCard = createCard(record);
+              $list.insertBefore(newCard, $list.firstChild);
+              applyTruncationCheck(newCard);
+              currentOffset++;
             }
-
-            // [Important] 每次向 DOM 中 prepend 一条，currentOffset 均加 1，防止后续滚动加载重复或错乱
-            currentOffset++;
           }
-        }
-      });
+        });
 
-      // 显示提示
-      $newRecordsHint.textContent = `🆕 新增了 ${newRecordsCount} 条记录`;
+      $newRecordsHint.textContent = `新增了 ${newRecordsCount} 条记录`;
       $newRecordsHint.classList.remove('hidden');
 
-      // [L2] 使用模块作用域定时器替代 window._newRecordTimer
       clearTimeout(newRecordTimer);
       newRecordTimer = setTimeout(() => {
         $newRecordsHint.classList.add('hidden');
@@ -521,19 +575,20 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
 
 // ── 事件绑定 ──
 function setupListeners() {
-  // 开关
   $collectToggle.addEventListener('click', handleToggle);
+  $collectToggle.addEventListener('keydown', (e) => {
+    if (e.key === ' ' || e.key === 'Enter') {
+      e.preventDefault();
+      handleToggle();
+    }
+  });
 
-  // 清空
   $btnClear.addEventListener('click', handleClearAll);
 
-  // 导出下拉
   $btnExport.addEventListener('click', (e) => {
     e.stopPropagation();
     $exportMenu.classList.toggle('hidden');
   });
-
-  // 导出菜单项
   $exportMenu.querySelectorAll('button').forEach(btn => {
     btn.addEventListener('click', () => {
       const format = btn.dataset.format;
@@ -541,18 +596,23 @@ function setupListeners() {
       handleExport(format);
     });
   });
-
-  // 点击外部关闭下拉
   document.addEventListener('click', () => {
     $exportMenu.classList.add('hidden');
   });
 
-  // 导入
   $btnImport.addEventListener('click', handleImport);
-
-  // 加载更多
   $btnLoadMore.addEventListener('click', loadMore);
 }
 
-// ── 启动 ──
-init();
+// ── 启动：任何一步抛错都展示错误态，避免白屏 ──
+init().catch(err => {
+  console.error('[text-collector] init failed:', err);
+  $list.innerHTML = '';
+  $emptyState.classList.remove('hidden');
+  const titleEl = $emptyState.querySelector('.empty-title');
+  const subEl = $emptyState.querySelector('.empty-sub');
+  if (titleEl) titleEl.textContent = '加载失败';
+  if (subEl) {
+    subEl.textContent = '本地存储读取异常。请尝试重启浏览器；如持续出现，可在 chrome://extensions 重新加载扩展。';
+  }
+});

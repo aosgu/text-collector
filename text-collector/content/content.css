@@ -1,4 +1,4 @@
-/* content.css — Toast 样式占位（实际样式在 Shadow DOM 内） */
-#text-collector-toast-host {
-  all: initial;
-}
+/* content.css — 预留文件。
+ * Toast 的所有样式都在 content.js 的 Shadow DOM 内部注入，
+ * 以避免被宿主页面的样式污染。此文件保留以便 manifest 声明与未来扩展。
+ */
