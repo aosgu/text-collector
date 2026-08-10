@@ -216,11 +216,15 @@ async function deleteRecord(record, card) {
 
   setTimeout(() => {
     card.remove();
-    totalCount--;
+    totalCount = Math.max(0, totalCount - 1);
+    // 已加载窗口收缩 1，避免后续 loadMore 从错误 offset 起读导致漏条/重条
+    currentOffset = Math.max(0, currentOffset - 1);
     updateRecordInfo();
     if (totalCount === 0) {
       $emptyState.classList.remove('hidden');
       $loadMore.classList.add('hidden');
+    } else if (currentOffset < totalCount) {
+      $loadMore.classList.remove('hidden');
     }
   }, 180);
 
