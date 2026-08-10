@@ -36,38 +36,43 @@ async function loadFirstPage(bridge) {
 async function loadMore(bridge) {
   if (bridge.getLoading()) return;
   bridge.setLoading(true);
+  try {
+    const { records, total } = await getSnippets(bridge.getLoadedCount(), PAGE_SIZE);
+    bridge.setTotalCount(total);
+    bridge.incrementLoaded(records.length);
 
-  const { records, total } = await getSnippets(bridge.getLoadedCount(), PAGE_SIZE);
-  bridge.setTotalCount(total);
-  bridge.incrementLoaded(records.length);
-
-  if (records.length === 0 && bridge.getLoadedCount() === 0) {
-    $emptyState.classList.remove('hidden');
-    $loadMore.classList.add('hidden');
-  } else {
-    $emptyState.classList.add('hidden');
-    for (const record of records) {
-      const card = createCard(record, bridge);
-      $list.appendChild(card);
-      applyTruncationCheck(card);
+    if (records.length === 0 && bridge.getLoadedCount() === 0) {
+      $emptyState.classList.remove('hidden');
+      $loadMore.classList.add('hidden');
+    } else {
+      $emptyState.classList.add('hidden');
+      for (const record of records) {
+        const card = createCard(record, bridge);
+        $list.appendChild(card);
+        applyTruncationCheck(card);
+      }
     }
+
+    if (bridge.getLoadedCount() < bridge.getTotalCount()) {
+      $loadMore.classList.remove('hidden');
+    } else {
+      $loadMore.classList.add('hidden');
+    }
+
+    await updateRecordInfo(bridge.getTotalCount());
+
+    if (bridge.getTotalCount() > CONFIG.STORAGE_WARNING_THRESHOLD) {
+      $storageWarning.classList.remove('hidden');
+    } else {
+      $storageWarning.classList.add('hidden');
+    }
+  } catch (err) {
+    console.error('[text-collector] loadMore failed:', err);
+    showToast('加载失败，请重试', { kind: 'danger' });
+    // 保持当前已加载的列表可见，不清空；用户可再次点击“加载更多”重试
+  } finally {
+    bridge.setLoading(false);
   }
-
-  if (bridge.getLoadedCount() < bridge.getTotalCount()) {
-    $loadMore.classList.remove('hidden');
-  } else {
-    $loadMore.classList.add('hidden');
-  }
-
-  await updateRecordInfo(bridge.getTotalCount());
-
-  if (bridge.getTotalCount() > CONFIG.STORAGE_WARNING_THRESHOLD) {
-    $storageWarning.classList.remove('hidden');
-  } else {
-    $storageWarning.classList.add('hidden');
-  }
-
-  bridge.setLoading(false);
 }
 
 // ── 计数显示 ──
@@ -103,6 +108,8 @@ function applyTruncationCheck(card) {
  * 点击卡片文本 → 复制；点击「展开/收起」→ 切换截断；点击垃圾桶 → 删除。
  * 所有采集文本通过 textContent 渲染，防止 XSS。
  * 卡片本身可键盘聚焦（tabindex=0），Enter/Space 触发复制，保持与鼠标一致。
+ * P2 修复：卡片不再使用 role=button（避免 button 内嵌 button 的 a11y 嵌套违规），
+ * 改为 role=group（语义为“一条记录分组”），内含的文本/展开/删除仍为可交互元素。
  * @param {object} record
  * @param {object} bridge - manager.js 传入的状态读写回调（透传给 deleteRecord）
  */
@@ -111,8 +118,8 @@ function createCard(record, bridge) {
   card.className = 'card';
   card.dataset.id = record.id;
   card.tabIndex = 0;
-  card.setAttribute('role', 'button');
-  card.setAttribute('aria-label', '复制这条采集文本');
+  card.setAttribute('role', 'group');
+  card.setAttribute('aria-label', '采集记录：' + record.text.slice(0, 30) + (record.text.length > 30 ? '…' : ''));
 
   const copyText = () => {
     copyToClipboard(record.text);
@@ -177,7 +184,7 @@ function createCard(record, bridge) {
 
 // ── 删除（带撤销） ──
 async function deleteRecord(record, card, bridge) {
-  const { getTotalCount, getLoadedCount, incrementTotal, decrementTotal, decrementLoaded, setIgnoreOrderChanges } = bridge;
+  const { getTotalCount, getLoadedCount, incrementTotal, decrementTotal, decrementLoaded, incrementLoaded, setIgnoreOrderChanges } = bridge;
   const recordCopy = { ...record };
   const nextSibling = card.nextSibling;
   const parent = card.parentNode;
@@ -234,6 +241,12 @@ async function deleteRecord(record, card, bridge) {
           applyTruncationCheck(restoredCard);
         }
         incrementTotal(); // totalCount + 1
+        // P1 修复：撤销后已加载数也要同步递增，否则下次 loadMore 会以错误 offset 起读导致重复/漏条
+        incrementLoaded();
+        // 若撤销前是空状态，撤销后需隐藏空状态并根据总数决定是否显示“加载更多”
+        if (getLoadedCount() < getTotalCount()) {
+          $loadMore.classList.remove('hidden');
+        }
         await updateRecordInfo(getTotalCount());
         showToast('已恢复', { kind: 'success' });
       } finally {

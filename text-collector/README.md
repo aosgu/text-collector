@@ -4,6 +4,7 @@
 
 | 版本 | 变更内容 |
 |------|---------|
+| **v0.6.3** | **全量审计 P1/P2 清零**：`adoptOrphanSnippets` 24h 节流 + `order为空强制扫描` + 缺`id`孤儿批量写回；`addSnippet` 写后校验重试(3次)收口并发覆写；`clearAllSnippets` 循环校验(3轮)兜底并发孤儿；`importSnippets` 分批写入(100/批) + order 单独合并；`getStorageEstimate` 均匀采样；`content` 追加 `isSelectionInEditable` 覆盖未聚焦 contenteditable；`detectDarkSurrounding` 支持 hsl/hsla；`render` 的 `loadMore` 加 `try/finally` + 删除撤销补 `incrementLoaded` + 卡片 `role` 由 `button` 改 `group` 消除嵌套告警；`import-export` 的 `handleExport` 加错误兜底；`manifest` 增 `tabs` 权限保证 `tabs.query` 兼容；移除已跟踪的 `.DS_Store` |
 | **v0.6.2** | **健壮性 + a11y 加固**：`importSnippets` 加类型守卫（坏记录不会再导致整批导入失败）；`deleteSnippet` 与 `addSnippet` 一致采用"删数据 → 重读 order → 写回"以缩小竞态窗口；清空确认弹窗默认焦点改为「取消」、Enter 键尊重当前焦点、加简易焦点陷阱与 `role="dialog"`/`aria-modal`；卡片支持 Tab 聚焦 + Enter/Space 键盘复制；展开按钮可键盘操作；导出菜单加 Escape/方向键导航、`aria-expanded`/`aria-haspopup`；toast 加 `role="status"`/`aria-live`；toast 宿主内联样式与 `content.css` 属性集同步；file input accept 加 MIME 兜底；清理 CSS 冗余选择器；注释与文档更新 |
 | **v0.6.1** | **修复选中后全屏乱码**：toast 宿主 light-DOM 被页面 CSS/`::before` iconfont 污染；恢复并强化 `content.css` 隔离 + 内联 `!important` 双重钉死；安全截断代理对；删除后分页 offset 修正；孤儿扫描健壮性；SW 冷启动 badge 同步 |
 | **v0.6** | **视觉重设计（方案 E · 轻霜 × Zed）**：暖白底 `#F5F3EE` + 衬线标题 + Zed 蓝 `#2F6FED`；新 logo（蓝括号 + 选中线）；管理页卡片细描边 + hover 上浮，左侧括号标记；toast 改为轻霜浮片（蓝勾徽标，浅/深页面自适应）；采集状态三态（成功/去重/失败）；删除按钮由 × 改为垃圾桶图标；toast 单实例、modal 键盘支持；orphan 扫描加一次性标记避免每次开页全量遍历 |
@@ -95,4 +96,4 @@
 - `innerHTML` 仅用于硬编码的 SVG 图标常量（`ICON_TRASH / ICON_CHECK / ICON_INFO / ICON_ALERT`，以及 toast badge 内联 SVG），不接受用户输入
 - Toast 内部 UI 位于 **closed Shadow DOM**，页面 CSS 无法污染内部节点；toast 宿主位于 light DOM，由 `content.css` + 内联 `!important` 双重钉死
 - CSP：`script-src 'self'; object-src 'self'`，不加载远程脚本
-- 权限：仅申请 `storage` / `unlimitedStorage` / `<all_urls>` host 权限，不申请 `tabs` / `scripting` / `webRequest` 等敏感权限
+- 权限：仅申请 `storage` / `unlimitedStorage` / `tabs`（用于聚焦已打开的管理页）/ `<all_urls>` host 权限，不申请 `scripting` / `webRequest` / `cookies` 等敏感权限

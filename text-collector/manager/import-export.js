@@ -13,27 +13,35 @@
 
 // ── 导出为 TXT（UTF-8 BOM）或 JSON ──
 async function handleExport(format) {
-  const records = await getAllSnippets();
-  const dateStr = new Date().toISOString().slice(0, 10);
+  try {
+    const records = await getAllSnippets();
+    const dateStr = new Date().toISOString().slice(0, 10);
 
-  if (format === 'txt') {
-    const texts = records.map(r => r.text);
-    const content = texts.join('\n\n');
-    const bom = '\uFEFF';
-    const blob = new Blob([bom + content], { type: 'text/plain;charset=utf-8' });
-    downloadBlob(blob, `snippets_${dateStr}.txt`);
-  } else if (format === 'json') {
-    const data = {
-      schemaVersion: SCHEMA_VERSION,
-      exportedAt: new Date().toISOString(),
-      count: records.length,
-      snippets: records,
-    };
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    downloadBlob(blob, `snippets_${dateStr}.json`);
+    if (format === 'txt') {
+      const texts = records.map(r => r.text);
+      const content = texts.join('\n\n');
+      const bom = '\uFEFF';
+      const blob = new Blob([bom + content], { type: 'text/plain;charset=utf-8' });
+      downloadBlob(blob, `snippets_${dateStr}.txt`);
+    } else if (format === 'json') {
+      const data = {
+        schemaVersion: SCHEMA_VERSION,
+        exportedAt: new Date().toISOString(),
+        count: records.length,
+        snippets: records,
+      };
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      downloadBlob(blob, `snippets_${dateStr}.json`);
+    } else {
+      showToast('未知导出格式', { kind: 'danger' });
+      return;
+    }
+
+    showToast(`已导出 ${records.length} 条`, { kind: 'success' });
+  } catch (err) {
+    console.error('[text-collector] export failed:', err);
+    showToast('导出失败：存储读取异常', { kind: 'danger' });
   }
-
-  showToast(`已导出 ${records.length} 条`, { kind: 'success' });
 }
 
 function downloadBlob(blob, filename) {

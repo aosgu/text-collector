@@ -55,33 +55,56 @@ function getDomain(url) {
 /**
  * 收领「孤儿」记录：存在 snip_<id> 但不在 snippets_order 中的数据。
  *
- * 产生原因：v0.4 单数组写入竞态、order 写入时的小概率覆盖、历史版本数据残留等。
- * 正常流程下 addSnippet 已经先写 snip_* 再写 order，新数据不会成为孤儿；
- * 这里只做一次启动时的修复扫描，扫描完成后写入 orphanScanV1 时间戳，后续直接跳过。
- * 如需强制重新扫描，递增标记名即可（例如 orphanScanV2）。
+ * 产生原因：v0.4 单数组写入竞态、order 写入时的小概率覆盖、历史版本数据残留、
+ * clearAll 与并发写入的竞态等。正常流程下 addSnippet 已经先写 snip_* 再写 order，
+ * 新数据不会成为孤儿；但为兜底，这里做带节流的定期扫描。
+ *
+ * 扫描策略（P1 修复）：
+ *  - 24h 内仅扫描一次（避免每次打开管理页全量读 5MB），超过 24h 自动重扫
+ *  - 若 order 为空但仍有 snip_*（clearAll 竞态典型），即使在节流期内也强制扫描
+ *  - 扫描时若发现缺 id 的孤儿，会批量写回 snip_* 修复损坏
  *
  * @returns {Promise<number>} 本次收领的孤儿记录数
  */
 async function adoptOrphanSnippets() {
   const ORPHAN_SCAN_FLAG = 'orphanScanV1';
+  const SCAN_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24h
 
+  let shouldScan = true;
+  let flagTime = 0;
   try {
     const meta = await chrome.storage.local.get(ORPHAN_SCAN_FLAG);
-    if (meta[ORPHAN_SCAN_FLAG]) return 0;
+    flagTime = meta[ORPHAN_SCAN_FLAG] || 0;
+    if (flagTime && (Date.now() - flagTime < SCAN_INTERVAL_MS)) {
+      // 节流期内：先做轻量检查，若 order 非空则跳过全量扫描
+      const orderCheck = await chrome.storage.local.get('snippets_order');
+      const order = orderCheck.snippets_order || [];
+      if (order.length > 0) {
+        shouldScan = false;
+      } else {
+        // order 为空但可能仍有 snip_*（clearAll 竞态残留），需强制扫描
+        shouldScan = true;
+      }
+    }
   } catch (_) { /* 元信息读取失败时继续扫描，宁可多扫一次也不丢数据 */ }
+
+  if (!shouldScan) return 0;
 
   const allData = await chrome.storage.local.get(null);
   const order = allData.snippets_order || [];
   const orderSet = new Set(order);
 
   const orphanRecords = [];
+  const dirtyFixes = {}; // 缺 id 的孤儿需写回 snip_*（P1-2）
   for (const key of Object.keys(allData)) {
     if (key.startsWith('snip_')) {
       const id = key.slice('snip_'.length);
       const record = allData[key];
-      // 必须是带有效 id 的对象；损坏/空值不收领，避免把 undefined 写进 order
       if (!orderSet.has(id) && record && typeof record === 'object') {
-        if (!record.id) record.id = id;
+        if (!record.id) {
+          record.id = id;
+          dirtyFixes[key] = record;
+        }
         if (typeof record.text === 'string' && record.text.length > 0) {
           orphanRecords.push(record);
         }
@@ -90,6 +113,17 @@ async function adoptOrphanSnippets() {
   }
 
   const updates = { [ORPHAN_SCAN_FLAG]: Date.now() };
+
+  // 先写回缺 id 的孤儿修复（避免 order 有 id 但 snip_* 仍缺 id）
+  const dirtyKeys = Object.keys(dirtyFixes);
+  if (dirtyKeys.length > 0) {
+    // 分批写回，避免单次 set 过大
+    for (let i = 0; i < dirtyKeys.length; i += 100) {
+      const batch = {};
+      for (const k of dirtyKeys.slice(i, i + 100)) batch[k] = dirtyFixes[k];
+      await chrome.storage.local.set(batch);
+    }
+  }
 
   if (orphanRecords.length > 0) {
     orphanRecords.sort((a, b) => (b.capturedAt || 0) - (a.capturedAt || 0));
@@ -157,16 +191,23 @@ async function addSnippet(text, url, title) {
 
   await chrome.storage.local.set({ [`snip_${id}`]: record });
 
-  // 重新读取最新 order 再 prepend，缩小并发写入时的竞态窗口。
-  // 注意：两个标签页几乎同时走到这里时，后写者仍可能覆盖先写者的 order 追加
-  // （数据本身不会丢，下次 orphan 扫描可捞回）。单用户场景概率极低，可接受。
-  const latestOrderData = await chrome.storage.local.get('snippets_order');
-  const latestOrder = latestOrderData.snippets_order || [];
-  // 防御：若 id 已在 order 中（极端重入），不重复 prepend
-  if (!latestOrder.includes(id)) {
-    await chrome.storage.local.set({
-      snippets_order: [id, ...latestOrder],
-    });
+  // 重新读取最新 order 再 prepend，并带最多 3 次校验重试，缩小并发写入时的竞态窗口。
+  // 两个标签页几乎同时走到这里时，后写者可能覆盖先写者；通过“写后校验 + 重试”把孤儿概率再降一个数量级
+  // （数据本身不会丢，即使仍有极小概率成为孤儿，下次 orphan 扫描也会捞回）。
+  let attempts = 0;
+  while (attempts < 3) {
+    const latestOrderData = await chrome.storage.local.get('snippets_order');
+    const latestOrder = latestOrderData.snippets_order || [];
+    if (latestOrder.includes(id)) break;
+    const deduped = Array.from(new Set([id, ...latestOrder]));
+    await chrome.storage.local.set({ snippets_order: deduped });
+    // 写后校验：若仍不在 order 中说明又被并发覆盖，重试
+    const verifyData = await chrome.storage.local.get('snippets_order');
+    const verifyOrder = verifyData.snippets_order || [];
+    if (verifyOrder.includes(id)) break;
+    attempts++;
+    // 微小退避，避免活锁
+    if (attempts < 3) await new Promise(r => setTimeout(r, 20 * attempts));
   }
 
   return { action: 'created', record };
@@ -189,17 +230,33 @@ async function deleteSnippet(id) {
 /**
  * 清空所有采集记录（snip_* 与 snippets_order）。
  * 不使用 storage.local.clear()，以免误删 schemaVersion / collectEnabled / orphanScanV1 等元数据。
+ * 带重试的竞态收口（P1-3）：若在收集 keys 与 remove 之间有并发 addSnippet 写入，
+ * 新 snip_* 可能成为孤儿；通过“remove 后再校验一次”循环最多 3 轮兜底清理。
  */
 async function clearAllSnippets() {
-  const allData = await chrome.storage.local.get(null);
-  const keysToRemove = [];
-  for (const key of Object.keys(allData)) {
-    if (key.startsWith('snip_') || key === 'snippets_order') {
-      keysToRemove.push(key);
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const allData = await chrome.storage.local.get(null);
+    const keysToRemove = [];
+    for (const key of Object.keys(allData)) {
+      if (key.startsWith('snip_') || key === 'snippets_order') {
+        keysToRemove.push(key);
+      }
     }
-  }
-  if (keysToRemove.length > 0) {
+    if (keysToRemove.length === 0) break;
     await chrome.storage.local.remove(keysToRemove);
+    // 校验是否仍有残留 snip_*（并发写入产生），有则继续下一轮
+    const check = await chrome.storage.local.get(null);
+    const remaining = Object.keys(check).filter(k => k.startsWith('snip_'));
+    if (remaining.length === 0) {
+      // 确保 order 也已清空（可能并发又写入了新 order）
+      const orderCheck = await chrome.storage.local.get('snippets_order');
+      if (!orderCheck.snippets_order || orderCheck.snippets_order.length === 0) break;
+      // order 非空但无 snip_*，说明是孤儿 order，直接清掉
+      await chrome.storage.local.remove('snippets_order');
+      break;
+    }
+    // 微小退避后重试
+    await new Promise(r => setTimeout(r, 20));
   }
 }
 
@@ -335,17 +392,31 @@ async function importSnippets(snippets) {
   // 新记录 id 按对象插入顺序（即文件中的顺序）。reverse 后 prepend
   // 使导入文件中越靠后的（通常越新）越靠近列表顶部。
   const newIds = Object.keys(newEntries).map(k => k.replace('snip_', ''));
-  await chrome.storage.local.set({
-    ...newEntries,
-    snippets_order: [...newIds.reverse(), ...order],
-  });
+
+  // 分批写入：避免单次 set 携带 5000+ key 触发配额/序列化限流（P2-1）
+  const entries = Object.entries(newEntries);
+  const IMPORT_BATCH = 100;
+  for (let i = 0; i < entries.length; i += IMPORT_BATCH) {
+    const batch = Object.fromEntries(entries.slice(i, i + IMPORT_BATCH));
+    await chrome.storage.local.set(batch);
+  }
+  // order 单独写入，保证即使中途失败，已写入的 snip_* 也能被下次 orphan 扫描捞回
+  if (newIds.length > 0) {
+    // 读取最新 order 再合并，避免与并发 addSnippet 的覆写；用拷贝避免 reverse 污染原数组
+    const reversedIds = [...newIds].reverse();
+    const latestOrderData = await chrome.storage.local.get('snippets_order');
+    const latestOrder = latestOrderData.snippets_order || order;
+    const finalOrder = Array.from(new Set([...reversedIds, ...latestOrder]));
+    await chrome.storage.local.set({ snippets_order: finalOrder });
+  }
 
   return { imported, skipped };
 }
 
 /**
  * 估算当前存储占用（KB）。
- * 取最近 N 条记录作为样本，计算平均大小后乘以总数。
+ * 均匀采样（P2）：当记录数远大于采样数时，不再只取前 50 条（可能全为短/长文本导致偏差），
+ * 而是按步长均匀抽取，使平均值更接近全量。
  */
 async function getStorageEstimate() {
   const orderData = await chrome.storage.local.get('snippets_order');
@@ -353,7 +424,17 @@ async function getStorageEstimate() {
   if (order.length === 0) return 0;
 
   const sampleSize = Math.min(CONFIG.STORAGE_ESTIMATE_SAMPLES, order.length);
-  const sampleIds = order.slice(0, sampleSize);
+  let sampleIds;
+  if (order.length <= CONFIG.STORAGE_ESTIMATE_SAMPLES) {
+    sampleIds = order.slice(0, sampleSize);
+  } else {
+    // 均匀采样：步长 = 总数/采样数，避免头部偏差
+    sampleIds = [];
+    const step = order.length / sampleSize;
+    for (let i = 0; i < sampleSize; i++) {
+      sampleIds.push(order[Math.floor(i * step)]);
+    }
+  }
   const sampleData = await chrome.storage.local.get(sampleIds.map(id => `snip_${id}`));
   let totalSize = 0;
   let validSamples = 0;
