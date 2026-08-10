@@ -77,9 +77,14 @@ async function adoptOrphanSnippets() {
   const orphanRecords = [];
   for (const key of Object.keys(allData)) {
     if (key.startsWith('snip_')) {
-      const id = key.replace('snip_', '');
-      if (!orderSet.has(id) && allData[key]) {
-        orphanRecords.push(allData[key]);
+      const id = key.slice('snip_'.length);
+      const record = allData[key];
+      // 必须是带有效 id 的对象；损坏/空值不收领，避免把 undefined 写进 order
+      if (!orderSet.has(id) && record && typeof record === 'object') {
+        if (!record.id) record.id = id;
+        if (typeof record.text === 'string' && record.text.length > 0) {
+          orphanRecords.push(record);
+        }
       }
     }
   }
@@ -87,8 +92,8 @@ async function adoptOrphanSnippets() {
   const updates = { [ORPHAN_SCAN_FLAG]: Date.now() };
 
   if (orphanRecords.length > 0) {
-    orphanRecords.sort((a, b) => b.capturedAt - a.capturedAt);
-    const sortedOrphanIds = orphanRecords.map(r => r.id);
+    orphanRecords.sort((a, b) => (b.capturedAt || 0) - (a.capturedAt || 0));
+    const sortedOrphanIds = orphanRecords.map(r => r.id).filter(Boolean);
     const newOrder = [...sortedOrphanIds, ...order];
     updates.snippets_order = Array.from(new Set(newOrder));
   }
@@ -152,12 +157,17 @@ async function addSnippet(text, url, title) {
 
   await chrome.storage.local.set({ [`snip_${id}`]: record });
 
-  // 重新读取最新 order 再 prepend，缩小并发写入时的竞态窗口
+  // 重新读取最新 order 再 prepend，缩小并发写入时的竞态窗口。
+  // 注意：两个标签页几乎同时走到这里时，后写者仍可能覆盖先写者的 order 追加
+  // （数据本身不会丢，下次 orphan 扫描可捞回）。单用户场景概率极低，可接受。
   const latestOrderData = await chrome.storage.local.get('snippets_order');
   const latestOrder = latestOrderData.snippets_order || [];
-  await chrome.storage.local.set({
-    snippets_order: [id, ...latestOrder],
-  });
+  // 防御：若 id 已在 order 中（极端重入），不重复 prepend
+  if (!latestOrder.includes(id)) {
+    await chrome.storage.local.set({
+      snippets_order: [id, ...latestOrder],
+    });
+  }
 
   return { action: 'created', record };
 }

@@ -23,9 +23,24 @@ chrome.runtime.onInstalled.addListener(async () => {
     await chrome.storage.local.set(updates);
   }
 
-  // 安装后立刻根据当前开关状态刷新一次 badge
+  // 安装/更新后立刻根据当前开关状态刷新一次 badge
+  // 注意：updates 可能刚把 collectEnabled 写成 true，要以最终值为准
+  const enabled = updates.collectEnabled !== undefined
+    ? updates.collectEnabled
+    : data.collectEnabled !== false;
+  await updateBadge(enabled);
+});
+
+// Service Worker 冷启动（浏览器重启后）时同步 badge，否则关闭状态会丢 badge
+chrome.runtime.onStartup.addListener(async () => {
+  const data = await chrome.storage.local.get('collectEnabled');
   await updateBadge(data.collectEnabled !== false);
 });
+
+// SW 每次被唤醒时也尽量对齐一次（onStartup 在部分场景不触发）
+chrome.storage.local.get('collectEnabled')
+  .then(data => updateBadge(data.collectEnabled !== false))
+  .catch(() => { /* storage 不可用时忽略 */ });
 
 chrome.action.onClicked.addListener(async () => {
   // 若管理页已经打开，直接切过去，避免重复开 tab

@@ -18,6 +18,8 @@ let debounceTimer = null;
 
 // ── Toast 元素 ──
 let toastHost = null;
+let toastHideTimer = null;
+let toastRemoveTimer = null;
 
 // ── 初始化 ──
 chrome.storage.local.get('collectEnabled')
@@ -109,6 +111,22 @@ function isEditableElement(el) {
   return false;
 }
 
+/**
+ * 按 UTF-16 code unit 上限截断，但绝不在代理对（emoji / 生僻字）中间切断，
+ * 否则会产生孤立高位代理，显示为 � 乱码。
+ */
+function truncateText(text, maxLength) {
+  if (maxLength <= 0) return '';
+  if (text.length <= maxLength) return text;
+  let end = maxLength;
+  // 若截断点落在高位代理上，回退 1 个 code unit，丢掉半个字符
+  const code = text.charCodeAt(end - 1);
+  if (code >= 0xD800 && code <= 0xDBFF) {
+    end -= 1;
+  }
+  return end > 0 ? text.substring(0, end) : '';
+}
+
 // ── 采集检查 ──
 
 function processSelection() {
@@ -136,7 +154,7 @@ function processSelection() {
   // NFC 规范化必须在长度截断之前执行，避免在 Unicode 组合字符中间截断导致乱码
   text = text.normalize('NFC');
   if (text.length > CONFIG.MAX_TEXT_LENGTH) {
-    text = text.substring(0, CONFIG.MAX_TEXT_LENGTH);
+    text = truncateText(text, CONFIG.MAX_TEXT_LENGTH);
   }
 
   const url = location.href;
@@ -148,7 +166,11 @@ function processSelection() {
     } else if (result.action === 'duplicate') {
       showToast('已采集过', 'info');
     }
-  }).catch(() => {
+  }).catch(err => {
+    // 扩展上下文失效（热重载后旧 content script 仍存活）时不再弹 toast，避免误导
+    if (err && /Extension context invalidated/i.test(String(err.message || err))) {
+      return;
+    }
     showToast('采集失败', 'danger');
   });
 }
@@ -198,41 +220,101 @@ function detectDarkSurrounding() {
   return false;
 }
 
+/** 移除当前 toast，并清理可能残留的定时器 */
+function removeToastHost() {
+  if (toastHideTimer) {
+    clearTimeout(toastHideTimer);
+    toastHideTimer = null;
+  }
+  if (toastRemoveTimer) {
+    clearTimeout(toastRemoveTimer);
+    toastRemoveTimer = null;
+  }
+  if (toastHost) {
+    try { toastHost.remove(); } catch (_) { /* 节点可能已被页面移除 */ }
+    toastHost = null;
+  }
+}
+
 /**
  * 在页面右上角弹出采集反馈 toast。
  *
- * 视觉：近白（浅色页面）或深石墨（深色页面）毛玻璃底 + 状态徽标。
- * 深浅通过 detectDarkSurrounding() 自动判断，逻辑基于系统主题与 <html>/<body> 计算背景亮度。
+ * 关键实现要点（修复「选中文字后全屏乱码」）：
+ * 1. 宿主位于 light DOM，必须用 inline !important + content.css 双重钉死几何与伪元素；
+ * 2. 所有可见 UI 放进 closed Shadow DOM，样式绝不泄漏到页面，也不被页面污染；
+ * 3. 禁止使用 `* { all: initial }`——会切断继承并清掉 SVG stroke，导致图标消失/文字异常。
  *
  * @param {string} message    提示文案
  * @param {'success'|'info'|'danger'} [kind='success'] 状态徽标
  */
 function showToast(message, kind = 'success') {
-  // 移除旧 toast
-  if (toastHost) {
-    toastHost.remove();
-    toastHost = null;
-  }
+  removeToastHost();
 
   const isDark = detectDarkSurrounding();
   const host = document.createElement('div');
   host.id = 'text-collector-toast-host';
-  host.style.cssText = 'position:fixed;top:16px;right:16px;z-index:2147483647;';
+  // 内联 !important：即使 content.css 未注入（或被 CSP/站点剥离）也能自保
+  host.style.cssText = [
+    'all: initial',
+    'position: fixed !important',
+    'top: 16px !important',
+    'right: 16px !important',
+    'left: auto !important',
+    'bottom: auto !important',
+    'width: max-content !important',
+    'height: max-content !important',
+    'max-width: min(90vw, 360px) !important',
+    'max-height: 40vh !important',
+    'margin: 0 !important',
+    'padding: 0 !important',
+    'border: none !important',
+    'background: transparent !important',
+    'box-shadow: none !important',
+    'overflow: hidden !important',
+    'z-index: 2147483647 !important',
+    'display: block !important',
+    'pointer-events: none !important',
+    'user-select: none !important',
+    'font-size: 0 !important',
+    'line-height: 0 !important',
+    'color: transparent !important',
+    'contain: layout style paint !important',
+    'isolation: isolate !important',
+    'transform: none !important',
+    'opacity: 1 !important',
+  ].join(';');
 
-  const shadow = host.attachShadow({ mode: 'closed' });
+  let shadow;
+  try {
+    shadow = host.attachShadow({ mode: 'closed' });
+  } catch (err) {
+    // 极少数页面若禁止 attachShadow，直接放弃 toast，绝不能把样式泄到 light DOM
+    console.warn('[text-collector] attachShadow failed, skip toast:', err);
+    return;
+  }
 
   const style = document.createElement('style');
+  // Shadow DOM 已隔离宿主页样式。只在 :host 设继承源，不要 `* { all: initial }`。
   style.textContent = `
-    :host, * { all: initial; }
+    :host {
+      all: initial;
+      display: block;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+                   "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC",
+                   "Helvetica Neue", Arial, sans-serif;
+      font-size: 13px;
+      line-height: 1.2;
+      color: #1c1d20;
+      pointer-events: none;
+    }
     .toast {
       display: inline-flex;
       align-items: center;
       gap: 9px;
       padding: 9px 14px 9px 9px;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
-                   "Noto Sans CJK SC", "Helvetica Neue", Arial, sans-serif;
+      font-family: inherit;
       font-size: 13px;
-      line-height: 1;
+      line-height: 1.2;
       letter-spacing: 0.01em;
       white-space: nowrap;
       border-radius: 10px;
@@ -241,10 +323,22 @@ function showToast(message, kind = 'success') {
       transition: opacity .2s ease, transform .2s ease;
       pointer-events: none;
       user-select: none;
+      box-sizing: border-box;
+      max-width: min(90vw, 360px);
+      overflow: hidden;
     }
     .toast.show {
       opacity: 1;
       transform: translateY(0);
+    }
+    .toast .label {
+      font-family: inherit;
+      font-size: 13px;
+      line-height: 1.2;
+      color: inherit;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
     /* 浅色版（默认） */
     .toast.light {
@@ -278,31 +372,48 @@ function showToast(message, kind = 'success') {
       display: flex;
       align-items: center;
       justify-content: center;
+      box-sizing: border-box;
     }
-    .badge svg { display: block; width: 13px; height: 13px; }
+    .badge svg {
+      display: block;
+      width: 13px;
+      height: 13px;
+      overflow: visible;
+    }
+    /* 显式恢复 SVG 描边/填充 */
+    .badge svg [stroke] {
+      stroke: currentColor;
+      fill: none;
+    }
+    .badge svg [fill]:not([fill="none"]) {
+      fill: currentColor;
+      stroke: none;
+    }
     /* success: 品牌蓝 */
-    .toast.light .badge.success {
-      background: #2f6fed; color: #fff;
-      box-shadow: 0 1px 0 rgba(255,255,255,0.25) inset, 0 2px 8px rgba(47,111,237,0.4);
-    }
+    .toast.light .badge.success,
     .toast.dark .badge.success {
-      background: #2f6fed; color: #fff;
-      box-shadow: 0 1px 0 rgba(255,255,255,0.25) inset, 0 2px 8px rgba(47,111,237,0.45);
+      background: #2f6fed;
+      color: #fff;
+      box-shadow: 0 1px 0 rgba(255,255,255,0.25) inset, 0 2px 8px rgba(47,111,237,0.4);
     }
     /* info: 中性灰（去重、已采集过） */
     .toast.light .badge.info {
-      background: rgba(28,29,32,0.08); color: #6b6b66;
+      background: rgba(28,29,32,0.08);
+      color: #6b6b66;
     }
     .toast.dark .badge.info {
-      background: rgba(255,255,255,0.1); color: #b8bcc8;
+      background: rgba(255,255,255,0.1);
+      color: #b8bcc8;
     }
     /* danger: 红（采集失败） */
     .toast.light .badge.danger {
-      background: #d14343; color: #fff;
+      background: #d14343;
+      color: #fff;
       box-shadow: 0 1px 0 rgba(255,255,255,0.25) inset, 0 2px 8px rgba(209,67,67,0.4);
     }
     .toast.dark .badge.danger {
-      background: #ff6b6b; color: #2a0f0f;
+      background: #ff6b6b;
+      color: #2a0f0f;
       box-shadow: 0 1px 0 rgba(255,255,255,0.25) inset, 0 2px 8px rgba(255,107,107,0.45);
     }
   `;
@@ -313,26 +424,27 @@ function showToast(message, kind = 'success') {
   const badge = document.createElement('span');
   badge.className = 'badge ' + kind;
 
-  // 按 kind 选择徽标图标（danger 感叹号 / info 圆圈 i / success 勾选）
+  // 按 kind 选择徽标图标（硬编码 SVG，无用户输入）
   if (kind === 'danger') {
     badge.innerHTML =
-      '<svg viewBox="0 0 16 16" fill="none">' +
+      '<svg viewBox="0 0 16 16" fill="none" aria-hidden="true">' +
       '<path d="M8 3.5v5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>' +
       '<circle cx="8" cy="11.6" r="0.9" fill="currentColor"/></svg>';
   } else if (kind === 'info') {
     badge.innerHTML =
-      '<svg viewBox="0 0 16 16" fill="none">' +
+      '<svg viewBox="0 0 16 16" fill="none" aria-hidden="true">' +
       '<circle cx="8" cy="8" r="5.6" stroke="currentColor" stroke-width="1.6"/>' +
       '<path d="M8 7.2v3.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>' +
       '<circle cx="8" cy="5.5" r="0.9" fill="currentColor"/></svg>';
   } else {
     badge.innerHTML =
-      '<svg viewBox="0 0 16 16" fill="none">' +
+      '<svg viewBox="0 0 16 16" fill="none" aria-hidden="true">' +
       '<path d="M3 8.5l3.2 3L13 4.5" stroke="currentColor" stroke-width="2.2" ' +
       'stroke-linecap="round" stroke-linejoin="round"/></svg>';
   }
 
   const label = document.createElement('span');
+  label.className = 'label';
   label.textContent = message;
 
   toast.appendChild(badge);
@@ -340,18 +452,29 @@ function showToast(message, kind = 'success') {
 
   shadow.appendChild(style);
   shadow.appendChild(toast);
-  document.documentElement.appendChild(host);
+
+  // 挂到 <html>，避免部分站点 body { overflow/transform } 影响 fixed 定位
+  const mountRoot = document.documentElement || document.body;
+  if (!mountRoot) return;
+  mountRoot.appendChild(host);
   toastHost = host;
 
   // 下一帧再加 .show 以触发入场动画
-  requestAnimationFrame(() => toast.classList.add('show'));
+  requestAnimationFrame(() => {
+    // 可能在 rAF 前已被新 toast 顶掉
+    if (toastHost === host) toast.classList.add('show');
+  });
 
-  // 1.5s 后淡出移除；只在 host 仍是自己时清空引用，避免覆盖更新 toast 的引用
-  setTimeout(() => {
+  // 1.5s 后淡出移除；只在 host 仍是自己时清空引用
+  toastHideTimer = setTimeout(() => {
     toast.classList.remove('show');
-    setTimeout(() => {
-      if (host.parentNode) host.remove();
+    toastRemoveTimer = setTimeout(() => {
+      if (host.parentNode) {
+        try { host.remove(); } catch (_) { /* ignore */ }
+      }
       if (toastHost === host) toastHost = null;
+      toastHideTimer = null;
+      toastRemoveTimer = null;
     }, 200);
   }, 1500);
 }

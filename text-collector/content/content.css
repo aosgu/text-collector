@@ -1,4 +1,59 @@
-/* content.css — 预留文件。
- * Toast 的所有样式都在 content.js 的 Shadow DOM 内部注入，
- * 以避免被宿主页面的样式污染。此文件保留以便 manifest 声明与未来扩展。
+/**
+ * content.css — 注入到宿主页面的样式（仅作用于 toast 宿主节点）
+ *
+ * Toast 内部样式在 content.js 的 closed Shadow DOM 里，不会泄漏。
+ * 但宿主节点本身位于 light DOM，会被页面全局 CSS 污染：
+ *   - `div { position:fixed; inset:0 }` → 全屏遮罩
+ *   - `div::before { content; font-family: iconfont }` → 全屏乱码/图标字符
+ * 因此这里必须用高优先级规则把宿主「钉死」成右上角透明小容器。
  */
+
+#text-collector-toast-host {
+  all: initial !important;
+  /* 几何：右上角、自适应内容、绝不铺满视口 */
+  position: fixed !important;
+  top: 16px !important;
+  right: 16px !important;
+  left: auto !important;
+  bottom: auto !important;
+  width: max-content !important;
+  height: max-content !important;
+  max-width: min(90vw, 360px) !important;
+  max-height: 40vh !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  overflow: hidden !important;
+  /* 层级与交互 */
+  z-index: 2147483647 !important;
+  display: block !important;
+  pointer-events: none !important;
+  user-select: none !important;
+  /* 防止页面字体/行高继承到宿主（Shadow 内另有自己的字体） */
+  font-size: 0 !important;
+  line-height: 0 !important;
+  color: transparent !important;
+  /* 布局隔离，降低页面 reflow 影响 */
+  contain: layout style paint !important;
+  isolation: isolate !important;
+  transform: none !important;
+  opacity: 1 !important;
+  filter: none !important;
+  clip: auto !important;
+  clip-path: none !important;
+}
+
+/* 屏蔽宿主上的伪元素（很多站点用 div::before 挂 iconfont，会表现为全屏乱码） */
+#text-collector-toast-host::before,
+#text-collector-toast-host::after {
+  content: none !important;
+  display: none !important;
+  background: none !important;
+  border: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
