@@ -282,7 +282,12 @@ function showToast(message, kind = 'success') {
     'isolation: isolate !important',
     'transform: none !important',
     'opacity: 1 !important',
+    'filter: none !important',
+    'clip: auto !important',
+    'clip-path: none !important',
   ].join(';');
+  // 注：此处属性集必须与 content.css 中 #text-collector-toast-host 规则保持一致，
+  // 防止 content.css 因 CSP/扩展加载异常未生效时出现属性漂移。
 
   let shadow;
   try {
@@ -420,6 +425,8 @@ function showToast(message, kind = 'success') {
 
   const toast = document.createElement('div');
   toast.className = 'toast ' + (isDark ? 'dark' : 'light');
+  toast.setAttribute('role', 'status');
+  toast.setAttribute('aria-live', 'polite');
 
   const badge = document.createElement('span');
   badge.className = 'badge ' + kind;

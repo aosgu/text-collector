@@ -37,7 +37,9 @@ chrome.runtime.onStartup.addListener(async () => {
   await updateBadge(data.collectEnabled !== false);
 });
 
-// SW 每次被唤醒时也尽量对齐一次（onStartup 在部分场景不触发）
+// ── SW 唤醒时兜底同步 badge ──
+// onInstalled/onStartup 在某些唤醒场景（SW 被事件唤醒但不是浏览器重启）不会触发，
+// 这里在脚本顶层直接读一次 storage 对齐 badge，保证用户每次都能看到正确状态。
 chrome.storage.local.get('collectEnabled')
   .then(data => updateBadge(data.collectEnabled !== false))
   .catch(() => { /* storage 不可用时忽略 */ });
