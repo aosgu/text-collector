@@ -111,6 +111,8 @@ async function loadMore() {
 // 顶部 brand 旁显示极简等宽条数，滚动列表时也能看到。
 async function updateRecordInfo() {
   const sizeKB = await getStorageEstimate();
+  // 安全：totalCount / sizeKB 都是 number，不会产生 HTML 注入；sep span 为硬编码静态标签。
+  // 若未来重构引入字符串变量，务必改用 DOM 构造或 textContent。
   $pageSub.innerHTML =
     `共 ${totalCount} 条 <span class="sep">/</span> 占用约 ${sizeKB} KB <span class="sep">/</span> 最新在前`;
   $toolbarCount.textContent = totalCount > 0 ? `${totalCount} snippets` : '';
@@ -158,35 +160,54 @@ const ICON_ALERT =
  * 创建一张记录卡片。
  * 点击卡片文本 → 复制；点击「展开/收起」→ 切换截断；点击垃圾桶 → 删除。
  * 所有采集文本通过 textContent 渲染，防止 XSS。
+ * 卡片本身可键盘聚焦（tabindex=0），Enter/Space 触发复制，保持与鼠标一致。
  */
 function createCard(record) {
   const card = document.createElement('article');
   card.className = 'card';
   card.dataset.id = record.id;
+  card.tabIndex = 0;
+  card.setAttribute('role', 'button');
+  card.setAttribute('aria-label', '复制这条采集文本');
 
-  const textEl = document.createElement('div');
-  textEl.className = 'card-text';
-  textEl.textContent = record.text; // 安全：textContent，禁止改为 innerHTML
-  textEl.addEventListener('click', () => {
+  const copyText = () => {
     copyToClipboard(record.text);
     card.classList.add('card-copied');
     setTimeout(() => card.classList.remove('card-copied'), 500);
     showToast('已复制', { kind: 'success' });
+  };
+
+  const textEl = document.createElement('div');
+  textEl.className = 'card-text';
+  textEl.textContent = record.text; // 安全：textContent，禁止改为 innerHTML
+  textEl.addEventListener('click', (e) => {
+    e.stopPropagation();
+    copyText();
   });
   card.appendChild(textEl);
 
   const expandEl = document.createElement('span');
   expandEl.className = 'card-expand';
   expandEl.textContent = '展开 ↓';
+  expandEl.setAttribute('role', 'button');
+  expandEl.tabIndex = 0;
   expandEl.addEventListener('click', (e) => {
     e.stopPropagation();
     const expanded = card.classList.toggle('expanded');
     expandEl.textContent = expanded ? '收起 ↑' : '展开 ↓';
   });
+  expandEl.addEventListener('keydown', (e) => {
+    if (e.key === ' ' || e.key === 'Enter') {
+      e.preventDefault();
+      e.stopPropagation();
+      expandEl.click();
+    }
+  });
   card.appendChild(expandEl);
 
   // 删除按钮：hover 时出现（移动端 CSS 中常驻）；用垃圾桶图标而非 ×，避免被误认为「关闭」
   const deleteBtn = document.createElement('button');
+  deleteBtn.type = 'button';
   deleteBtn.className = 'card-delete';
   deleteBtn.title = '删除';
   deleteBtn.setAttribute('aria-label', '删除这条记录');
@@ -196,6 +217,16 @@ function createCard(record) {
     deleteRecord(record, card);
   });
   card.appendChild(deleteBtn);
+
+  // 卡片键盘：Enter/Space 在焦点于卡片本身（非内部按钮）时触发复制
+  card.addEventListener('keydown', (e) => {
+    const target = e.target;
+    const isOnCardItself = target === card;
+    if ((e.key === ' ' || e.key === 'Enter') && isOnCardItself) {
+      e.preventDefault();
+      copyText();
+    }
+  });
 
   return card;
 }
@@ -372,24 +403,59 @@ async function handleClearAll() {
   );
 }
 
-// ── 确认弹窗（Esc 取消 / Enter 确认 / 点遮罩关闭） ──
+// ── 确认弹窗（Esc 取消 / Enter 触发焦点按钮 / 点遮罩关闭） ──
 function showConfirmModal(title, body, onConfirm) {
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
+  overlay.setAttribute('role', 'dialog');
+  overlay.setAttribute('aria-modal', 'true');
+
+  let lastFocused = null;
 
   const close = () => {
     overlay.remove();
     document.removeEventListener('keydown', onKey);
+    document.removeEventListener('focusin', onFocusIn);
+    // 把焦点还给触发前的元素
+    if (lastFocused && typeof lastFocused.focus === 'function') {
+      lastFocused.focus();
+    }
   };
 
   const onKey = (e) => {
     if (e.key === 'Escape') {
       e.preventDefault();
       close();
+    } else if (e.key === 'Tab') {
+      // 简易焦点陷阱：Shift+Tab 从取消按钮绕回确定，Tab 从确定绕回取消
+      const focusables = modal.querySelectorAll('button');
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
     } else if (e.key === 'Enter' && !e.shiftKey) {
+      // 尊重当前焦点：若焦点在某个按钮上，交给浏览器默认激活行为；
+      // 仅在焦点在弹窗内非按钮元素（如 body 文本）时，才兜底触发「取消」。
+      // 破坏性操作（清空）绝不应在 Enter 下默认触发确认。
+      const active = document.activeElement;
+      if (active && (active === cancelBtn || active === confirmBtn)) {
+        return; // 让 click 事件自然派发
+      }
       e.preventDefault();
       close();
-      if (onConfirm) onConfirm();
+    }
+  };
+
+  // 若 Tab 把焦点移出弹窗（焦点陷阱兜底），拉回取消按钮
+  const onFocusIn = (e) => {
+    if (!modal.contains(e.target)) {
+      e.stopPropagation();
+      cancelBtn.focus();
     }
   };
 
@@ -398,7 +464,9 @@ function showConfirmModal(title, body, onConfirm) {
 
   const titleEl = document.createElement('div');
   titleEl.className = 'modal-title';
+  titleEl.id = 'modal-title-' + Math.random().toString(36).slice(2, 8);
   titleEl.textContent = title;
+  modal.setAttribute('aria-labelledby', titleEl.id);
 
   const bodyEl = document.createElement('div');
   bodyEl.className = 'modal-body';
@@ -433,9 +501,12 @@ function showConfirmModal(title, body, onConfirm) {
     if (e.target === overlay) close();
   });
 
-  // 把焦点交给「确定」，方便键盘用户直接 Enter 确认
-  setTimeout(() => confirmBtn.focus(), 0);
+  // 记录打开弹窗前的焦点，关闭时恢复
+  lastFocused = document.activeElement;
+  // 破坏性操作默认焦点给「取消」，避免误按 Enter 直接执行不可撤销操作
+  setTimeout(() => cancelBtn.focus(), 0);
   document.addEventListener('keydown', onKey);
+  document.addEventListener('focusin', onFocusIn);
 }
 
 // ── 导出为 TXT（UTF-8 BOM）或 JSON ──
@@ -589,19 +660,77 @@ function setupListeners() {
 
   $btnClear.addEventListener('click', handleClearAll);
 
+  const setExportMenuOpen = (open) => {
+    $exportMenu.classList.toggle('hidden', !open);
+    $btnExport.setAttribute('aria-expanded', open ? 'true' : 'false');
+  };
+  const focusExportItem = (dir) => {
+    const items = Array.from($exportMenu.querySelectorAll('button'));
+    if (items.length === 0) return;
+    const current = document.activeElement;
+    const idx = items.indexOf(current);
+    let next = 0;
+    if (idx >= 0) {
+      next = (idx + dir + items.length) % items.length;
+    } else {
+      next = dir > 0 ? 0 : items.length - 1;
+    }
+    items[next].focus();
+  };
   $btnExport.addEventListener('click', (e) => {
     e.stopPropagation();
-    $exportMenu.classList.toggle('hidden');
+    const isHidden = $exportMenu.classList.contains('hidden');
+    setExportMenuOpen(isHidden);
+    if (isHidden) {
+      // 打开后把焦点交给第一项，方便键盘用户
+      const first = $exportMenu.querySelector('button');
+      if (first) first.focus();
+    }
   });
   $exportMenu.querySelectorAll('button').forEach(btn => {
     btn.addEventListener('click', () => {
       const format = btn.dataset.format;
-      $exportMenu.classList.add('hidden');
+      setExportMenuOpen(false);
       handleExport(format);
+      $btnExport.focus(); // 菜单操作后把焦点还给触发按钮
     });
   });
-  document.addEventListener('click', () => {
-    $exportMenu.classList.add('hidden');
+  $exportMenu.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      setExportMenuOpen(false);
+      $btnExport.focus();
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      focusExportItem(1);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      focusExportItem(-1);
+    }
+  });
+  $btnExport.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !$exportMenu.classList.contains('hidden')) {
+      e.preventDefault();
+      setExportMenuOpen(false);
+    } else if ((e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') &&
+               $exportMenu.classList.contains('hidden')) {
+      e.preventDefault();
+      setExportMenuOpen(true);
+      const first = $exportMenu.querySelector('button');
+      if (first) first.focus();
+    }
+  });
+  document.addEventListener('click', (e) => {
+    // 若点击发生在 dropdown 外则关闭；点击 $btnExport 由它自己 toggle
+    if (!e.target.closest('.dropdown')) {
+      setExportMenuOpen(false);
+    }
+  });
+  document.addEventListener('focusin', (e) => {
+    // Tab 到菜单外时自动关闭
+    if (!e.target.closest('.dropdown')) {
+      setExportMenuOpen(false);
+    }
   });
 
   $btnImport.addEventListener('click', handleImport);

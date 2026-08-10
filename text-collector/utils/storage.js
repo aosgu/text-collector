@@ -173,13 +173,16 @@ async function addSnippet(text, url, title) {
 }
 
 /**
- * 删除一条记录
+ * 删除一条记录。
+ * 流程与 addSnippet 一致：先 remove snip_<id>，再重新读取最新 order 再 filter-set，
+ * 缩小与其他标签页并发写入时的竞态窗口（与 addSnippet 同等级的可接受概率）。
  */
 async function deleteSnippet(id) {
+  await chrome.storage.local.remove(`snip_${id}`);
+  // 重新读取最新 order 再删，避免把另一个标签页刚 prepend 的新 id 一起覆盖掉
   const orderData = await chrome.storage.local.get('snippets_order');
   const order = orderData.snippets_order || [];
   const newOrder = order.filter(oid => oid !== id);
-  await chrome.storage.local.remove(`snip_${id}`);
   await chrome.storage.local.set({ snippets_order: newOrder });
 }
 
@@ -291,10 +294,12 @@ async function importSnippets(snippets) {
   const newEntries = {};
 
   for (const snip of snippets) {
-    if (!snip.text || !snip.urlKey || !snip.capturedAt) {
-      skipped++;
-      continue;
-    }
+    // 防御：跳过非对象 / null / 缺字段 / 字段类型错误的损坏项，
+    // 避免一条坏记录让整批导入抛 TypeError 全部失败
+    if (!snip || typeof snip !== 'object') { skipped++; continue; }
+    if (typeof snip.text !== 'string' || snip.text.length === 0) { skipped++; continue; }
+    if (typeof snip.urlKey !== 'string' || snip.urlKey.length === 0) { skipped++; continue; }
+    if (typeof snip.capturedAt !== 'number' || !Number.isFinite(snip.capturedAt)) { skipped++; continue; }
 
     const key = `${snip.urlKey}::${snip.text}`;
     if (existingKeys.has(key)) {
@@ -302,17 +307,26 @@ async function importSnippets(snippets) {
       continue;
     }
 
-    const id = snip.id || generateUUID();
+    const id = (typeof snip.id === 'string' && snip.id.length > 0) ? snip.id : generateUUID();
+    const url = typeof snip.url === 'string' ? snip.url : '';
+    const title = typeof snip.title === 'string' ? snip.title : '';
+    const domain = (typeof snip.domain === 'string' && snip.domain.length > 0)
+      ? snip.domain
+      : getDomain(url);
+    const lastSelectedAt = (typeof snip.lastSelectedAt === 'number' && Number.isFinite(snip.lastSelectedAt))
+      ? snip.lastSelectedAt
+      : snip.capturedAt;
+
     // 补齐缺失字段，保证导入后记录结构完整
     newEntries[`snip_${id}`] = {
       id,
       text: snip.text,
-      url: snip.url || '',
+      url,
       urlKey: snip.urlKey,
-      title: snip.title || '',
-      domain: snip.domain || getDomain(snip.url || ''),
+      title,
+      domain,
       capturedAt: snip.capturedAt,
-      lastSelectedAt: snip.lastSelectedAt || snip.capturedAt,
+      lastSelectedAt,
     };
     existingKeys.add(key);
     imported++;

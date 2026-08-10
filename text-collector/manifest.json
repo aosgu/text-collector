@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "网页文字采集器",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "description": "选中文字自动保存，点击图标管理采集记录",
   "permissions": [
     "storage",

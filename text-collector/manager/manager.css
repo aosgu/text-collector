@@ -172,16 +172,14 @@ body {
   outline-offset: 1px;
 }
 
-.btn-primary,
-.btn.primary {
+.btn-primary {
   background: var(--blue);
   border-color: var(--blue);
   color: #fff;
   font-weight: 500;
   box-shadow: var(--shadow-btn-primary);
 }
-.btn-primary:hover,
-.btn.primary:hover {
+.btn-primary:hover {
   background: var(--blue-hover);
   border-color: var(--blue-hover);
 }
@@ -387,6 +385,18 @@ body {
   border-color: transparent;
   box-shadow: var(--shadow-card-hover);
   transform: translateY(-1px);
+}
+.card:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+  border-color: transparent;
+  box-shadow: var(--shadow-card-hover);
+}
+/* 展开按钮焦点样式 */
+.card-expand:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+  border-radius: var(--radius-xs);
 }
 
 /* 左侧方括号标记（呼应 logo） */
