@@ -11,6 +11,8 @@ let isLoading = false;
 let newRecordsCount = 0;
 // [L2] 使用模块作用域变量替代 window._newRecordTimer
 let newRecordTimer = null;
+// 并发及撤销保护：若为 true 则在 onChanged 中忽略 snippets_order 变化
+let ignoreAllOrderChanges = false;
 
 // ── DOM ──
 const $list = document.getElementById('list');
@@ -30,6 +32,7 @@ const $fileInput = document.getElementById('file-input');
 
 // ── 初始化 ──
 async function init() {
+  await adoptOrphanSnippets(); // 自动收领孤儿数据，恢复并发写入可能遗漏的记录
   await renderToggle();
   await loadFirstPage();
   setupListeners();
@@ -72,7 +75,17 @@ async function loadMore() {
   } else {
     $emptyState.classList.add('hidden');
     for (const record of records) {
-      $list.appendChild(createCard(record));
+      const card = createCard(record);
+      $list.appendChild(card);
+
+      // [Truncation Check] 检查文本行数是否超出 3 行截断。若未超出，则隐藏「展开」按钮
+      const textEl = card.querySelector('.card-text');
+      const expandEl = card.querySelector('.card-expand');
+      if (textEl && expandEl) {
+        if (textEl.scrollHeight <= textEl.clientHeight) {
+          expandEl.style.display = 'none';
+        }
+      }
     }
   }
 
@@ -155,6 +168,15 @@ async function deleteRecord(record, card) {
   // 保存记录副本用于撤销
   const recordCopy = { ...record };
 
+  // 记录其原先在 DOM 中的位置，用于原位恢复，防止刷新页面导致滚动丢失
+  const nextSibling = card.nextSibling;
+  const parent = card.parentNode;
+
+  // 记录删除前在 snippets_order 中的索引位置
+  const orderData = await chrome.storage.local.get('snippets_order');
+  const order = orderData.snippets_order || [];
+  const originalIndex = order.indexOf(record.id);
+
   // 立即从界面移除
   card.style.transition = 'opacity 0.2s, transform 0.2s';
   card.style.opacity = '0';
@@ -164,6 +186,11 @@ async function deleteRecord(record, card) {
     card.remove();
     totalCount--;
     updateRecordInfo();
+    // [Bug Fix] 若全部记录删除完毕，则显示空状态提示
+    if (totalCount === 0) {
+      $emptyState.classList.remove('hidden');
+      $loadMore.classList.add('hidden');
+    }
   }, 200);
 
   // 从 storage 删除
@@ -171,20 +198,47 @@ async function deleteRecord(record, card) {
 
   // 显示撤销 toast
   showToast('已删除', '撤销', async () => {
-    // 恢复记录
+    ignoreAllOrderChanges = true; // 开启保护，防止 onChanged 监听器触发重复追加
+
+    // 1. 恢复记录内容
     const id = recordCopy.id;
     await chrome.storage.local.set({
       [`snip_${id}`]: recordCopy,
     });
-    // 更新 order
-    const orderData = await chrome.storage.local.get('snippets_order');
-    const order = orderData.snippets_order || [];
-    await chrome.storage.local.set({
-      snippets_order: [id, ...order],
-    });
 
-    // 重新渲染
-    await loadFirstPage();
+    // 2. 恢复其在 snippets_order 中的原始索引
+    const currentOrderData = await chrome.storage.local.get('snippets_order');
+    let currentOrder = currentOrderData.snippets_order || [];
+    if (originalIndex !== -1 && originalIndex <= currentOrder.length) {
+      currentOrder.splice(originalIndex, 0, id);
+    } else {
+      currentOrder = [id, ...currentOrder];
+    }
+    await chrome.storage.local.set({ snippets_order: currentOrder });
+
+    // 3. 在原 DOM 位置平滑恢复 card
+    const restoredCard = createCard(recordCopy);
+    if (parent) {
+      $emptyState.classList.add('hidden'); // 恢复时必定非空，隐藏空状态
+      if (nextSibling && nextSibling.parentNode === parent) {
+        parent.insertBefore(restoredCard, nextSibling);
+      } else {
+        parent.appendChild(restoredCard);
+      }
+
+      // 4. 对恢复的 card 执行截断检查
+      const textEl = restoredCard.querySelector('.card-text');
+      const expandEl = restoredCard.querySelector('.card-expand');
+      if (textEl && expandEl) {
+        if (textEl.scrollHeight <= textEl.clientHeight) {
+          expandEl.style.display = 'none';
+        }
+      }
+    }
+
+    totalCount++;
+    await updateRecordInfo();
+    ignoreAllOrderChanges = false; // 关闭保护
     showToast('已恢复');
   });
 }
@@ -250,9 +304,14 @@ async function handleClearAll() {
     '清空全部记录',
     `确定清空全部 ${totalCount} 条记录？${dateStr ? `最早记录于 ${dateStr}。` : ''}此操作不可撤销。`,
     async () => {
-      await clearAllSnippets();
-      await loadFirstPage();
-      showToast('已清空');
+      ignoreAllOrderChanges = true;
+      try {
+        await clearAllSnippets();
+        await loadFirstPage();
+        showToast('已清空');
+      } finally {
+        ignoreAllOrderChanges = false;
+      }
     }
   );
 }
@@ -367,11 +426,14 @@ $fileInput.addEventListener('change', async (e) => {
       return;
     }
 
+    ignoreAllOrderChanges = true;
     const result = await importSnippets(data.snippets);
     await loadFirstPage();
     showToast(`导入了 ${result.imported} 条，跳过 ${result.skipped} 条`);
   } catch (err) {
     showToast('导入失败：文件解析错误');
+  } finally {
+    ignoreAllOrderChanges = false;
   }
 
   $fileInput.value = '';
@@ -396,17 +458,52 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
 
   // 新记录
   if (changes.snippets_order) {
+    // 若开启了本地变更忽略保护，直接跳过处理
+    if (ignoreAllOrderChanges) return;
+
     const newOrder = changes.snippets_order.newValue || [];
     const oldOrder = changes.snippets_order.oldValue || [];
 
     if (newOrder.length > oldOrder.length) {
       // 有新记录
       const newIds = newOrder.filter(id => !oldOrder.includes(id));
+      if (newIds.length === 0) return;
+
       newRecordsCount += newIds.length;
 
       // 更新计数
       totalCount = newOrder.length;
       updateRecordInfo();
+
+      // [PRD 自动追加 + 提示] 获取新记录的详细信息并追加到头部
+      chrome.storage.local.get(newIds.map(id => `snip_${id}`)).then(recordsData => {
+        $emptyState.classList.add('hidden'); // 新增时必定非空，隐藏空状态
+
+        // 保持新记录的相对时间顺序（newOrder 中最新在前，所以我们要按 newOrder 中的顺序把它们 prepend 到 DOM 中）
+        const sortedNewIds = newOrder.filter(id => newIds.includes(id));
+
+        // 从后往前 prepend，保证最新的一条在最顶部
+        for (let i = sortedNewIds.length - 1; i >= 0; i--) {
+          const id = sortedNewIds[i];
+          const record = recordsData[`snip_${id}`];
+          if (record) {
+            const newCard = createCard(record);
+            $list.insertBefore(newCard, $list.firstChild);
+
+            // 对新追加的 card 执行截断检查
+            const textEl = newCard.querySelector('.card-text');
+            const expandEl = newCard.querySelector('.card-expand');
+            if (textEl && expandEl) {
+              if (textEl.scrollHeight <= textEl.clientHeight) {
+                expandEl.style.display = 'none';
+              }
+            }
+
+            // [Important] 每次向 DOM 中 prepend 一条，currentOffset 均加 1，防止后续滚动加载重复或错乱
+            currentOffset++;
+          }
+        }
+      });
 
       // 显示提示
       $newRecordsHint.textContent = `🆕 新增了 ${newRecordsCount} 条记录`;

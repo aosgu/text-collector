@@ -51,26 +51,43 @@ function getDomain(url) {
 }
 
 /**
- * [L7] 清理孤儿数据：对比 storage 中所有 snip_* keys 和 snippets_order，
- * 删除不在 order 中的孤儿记录
- * @returns {Promise<number>} 清理的孤儿记录数
+ * 自动寻找并收领孤儿数据（存在 snip_* 但不在 snippets_order 中的记录），
+ * 将它们合并回 snippets_order 中（按 capturedAt 降序），防止因并发写入导致的数据丢失。
+ * @returns {Promise<number>} 收领的孤儿记录数
  */
-async function cleanOrphanSnippets() {
+async function adoptOrphanSnippets() {
   const allData = await chrome.storage.local.get(null);
   const order = allData.snippets_order || [];
   const orderSet = new Set(order);
 
-  const orphanKeys = [];
+  const orphanIds = [];
+  const orphanRecords = [];
   for (const key of Object.keys(allData)) {
-    if (key.startsWith('snip_') && !orderSet.has(key.replace('snip_', ''))) {
-      orphanKeys.push(key);
+    if (key.startsWith('snip_')) {
+      const id = key.replace('snip_', '');
+      if (!orderSet.has(id)) {
+        orphanIds.push(id);
+        if (allData[key]) {
+          orphanRecords.push(allData[key]);
+        }
+      }
     }
   }
 
-  if (orphanKeys.length > 0) {
-    await chrome.storage.local.remove(orphanKeys);
+  if (orphanIds.length === 0) {
+    return 0;
   }
-  return orphanKeys.length;
+
+  // 按照 capturedAt 降序排序（最新在前），因为 order 是最新在前
+  orphanRecords.sort((a, b) => b.capturedAt - a.capturedAt);
+  const sortedOrphanIds = orphanRecords.map(r => r.id);
+
+  // 合并并去重，重置 order
+  const newOrder = [...sortedOrphanIds, ...order];
+  const uniqueOrder = Array.from(new Set(newOrder));
+  await chrome.storage.local.set({ snippets_order: uniqueOrder });
+
+  return sortedOrphanIds.length;
 }
 
 /**
@@ -248,10 +265,8 @@ async function importSnippets(snippets) {
   const orderData = await chrome.storage.local.get('snippets_order');
   const order = orderData.snippets_order || [];
 
-  // 读取现有记录用于去重
-  const existingData = await chrome.storage.local.get(order.map(id => `snip_${id}`));
-  const existingRecords = order.map(id => existingData[`snip_${id}`]).filter(Boolean);
-
+  // [Performance Optimization] 使用分批读取的 getAllSnippets()，避免一次性 get 大量 keys 的性能问题
+  const existingRecords = await getAllSnippets();
   const existingKeys = new Set(existingRecords.map(r => `${r.urlKey}::${r.text}`));
 
   let imported = 0;

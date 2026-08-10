@@ -70,6 +70,18 @@ function isPureURL(text) {
   return false;
 }
 
+/**
+ * 递归地获取当前页面的 activeElement，支持穿透 Shadow DOM，
+ * 从而准确判断嵌套在 Shadow DOM 内的 input/textarea 等编辑区域。
+ */
+function getActiveElement(root = document) {
+  let el = root.activeElement;
+  while (el && el.shadowRoot && el.shadowRoot.activeElement) {
+    el = el.shadowRoot.activeElement;
+  }
+  return el;
+}
+
 function isEditableElement(el) {
   if (!el) return false;
   const tag = el.tagName;
@@ -84,8 +96,8 @@ function processSelection() {
   if (!isInitialized) return;
   if (!collectEnabled) return;
 
-  // 跳过编辑区域
-  if (isEditableElement(document.activeElement)) return;
+  // 跳过编辑区域（穿透 Shadow DOM）
+  if (isEditableElement(getActiveElement())) return;
 
   // 跳过页面加载初期的 selection 恢复
   if (Date.now() - pageLoadTime < CONFIG.PAGE_LOAD_GRACE_MS) return;
