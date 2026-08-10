@@ -53,7 +53,11 @@
 | `content/content.js` | 内容脚本：选中检测 + 防抖 + 准入规则 + Shadow DOM toast |
 | `content/content.css` | 内容脚本样式（仅作用于 toast 宿主 light-DOM 节点） |
 | `manager/manager.html` | 管理页 HTML |
-| `manager/manager.js` | 管理页逻辑：列表/复制/删除/撤销/导出/导入/开关/实时订阅 |
+| `manager/manager.js` | 管理页入口：初始化 / 全局状态 / 事件绑定 / storage 实时订阅 / 开关与清空 |
+| `manager/render.js` | 管理页列表渲染：卡片创建 / 分页加载 / 计数 / 删除撤销 / 新记录 prepend / 错误态 |
+| `manager/toast.js` | 管理页 Toast（单实例）：`showToast` / `dismiss` / `ICON_*` 图标常量 |
+| `manager/modal.js` | 管理页确认弹窗：`showConfirmModal` |
+| `manager/import-export.js` | 管理页导入/导出：`handleExport` / `handleImport` / `downloadBlob` |
 | `manager/manager.css` | 管理页样式（暖白 + 衬线 + 品牌蓝） |
 | `background/service-worker.js` | 后台 SW：安装初始化 / 图标点击 / badge / 快捷键 |
 | `utils/storage.js` | 分片存储读写工具函数（content 与 manager 共用）+ `CONFIG` 常量 |
