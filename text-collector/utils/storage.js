@@ -228,34 +228,86 @@ async function deleteSnippet(id) {
 }
 
 /**
- * 清空所有采集记录（snip_* 与 snippets_order）。
- * 不使用 storage.local.clear()，以免误删 schemaVersion / collectEnabled / orphanScanV1 等元数据。
- * 带重试的竞态收口（P1-3）：若在收集 keys 与 remove 之间有并发 addSnippet 写入，
- * 新 snip_* 可能成为孤儿；通过“remove 后再校验一次”循环最多 3 轮兜底清理。
+ * 纯函数：根据页面筛选条件过滤 ID 顺序列表
+ * @param {Array} order ID 顺序列表
+ * @param {Object} recordsMap 映射表 { 'snip_xxx': { id, saved, clearedFromHome, ... } }
+ * @param {string} filter 筛选条件：'home' | 'saved' | 'all'
+ * @returns {Array} 经过筛选后的 ID 列表
+ */
+function filterOrderRecords(order, recordsMap, filter = 'home') {
+  if (!Array.isArray(order)) return [];
+  if (filter === 'all') return order;
+  return order.filter(id => {
+    const r = recordsMap['snip_' + id];
+    if (!r) return false;
+    if (filter === 'saved') {
+      return r.saved === true;
+    } else if (filter === 'home') {
+      return !r.clearedFromHome;
+    }
+    return true;
+  });
+}
+
+/**
+ * 获取过滤后的排序 ID 列表
+ * @param {string} filter 'home' | 'saved' | 'all'
+ */
+async function getFilteredOrder(filter = 'home') {
+  const orderData = await chrome.storage.local.get('snippets_order');
+  const order = orderData.snippets_order || [];
+  if (order.length === 0 || filter === 'all') return order;
+
+  const recordsData = await chrome.storage.local.get(order.map(id => `snip_${id}`));
+  return filterOrderRecords(order, recordsData, filter);
+}
+
+/**
+ * 清空所有采集记录（首页）。
+ * 清空首页时，未保存记录彻底删除；已保存（saved === true）记录保留并设 clearedFromHome=true，
+ * 仅在其后显式出现在“已保存”页签中。
  */
 async function clearAllSnippets() {
   for (let attempt = 0; attempt < 3; attempt++) {
     const allData = await chrome.storage.local.get(null);
     const keysToRemove = [];
+    const savedOrder = [];
+    const updates = {};
+
     for (const key of Object.keys(allData)) {
-      if (key.startsWith('snip_') || key === 'snippets_order') {
-        keysToRemove.push(key);
+      if (key.startsWith('snip_')) {
+        const record = allData[key];
+        if (record && record.saved === true) {
+          record.clearedFromHome = true;
+          updates[key] = record;
+          savedOrder.push(record.id);
+        } else {
+          keysToRemove.push(key);
+        }
       }
     }
-    if (keysToRemove.length === 0) break;
-    await chrome.storage.local.remove(keysToRemove);
-    // 校验是否仍有残留 snip_*（并发写入产生），有则继续下一轮
+
+    if (keysToRemove.length > 0) {
+      await chrome.storage.local.remove(keysToRemove);
+    }
+
+    const order = allData.snippets_order || [];
+    const savedIdSet = new Set(savedOrder);
+    const newOrder = order.filter(id => savedIdSet.has(id));
+
+    updates.snippets_order = newOrder;
+    await chrome.storage.local.set(updates);
+
+    // 校验是否仍有未保存的残留记录
     const check = await chrome.storage.local.get(null);
-    const remaining = Object.keys(check).filter(k => k.startsWith('snip_'));
-    if (remaining.length === 0) {
-      // 确保 order 也已清空（可能并发又写入了新 order）
-      const orderCheck = await chrome.storage.local.get('snippets_order');
-      if (!orderCheck.snippets_order || orderCheck.snippets_order.length === 0) break;
-      // order 非空但无 snip_*，说明是孤儿 order，直接清掉
-      await chrome.storage.local.remove('snippets_order');
+    const remainingUnsaved = Object.keys(check).filter(k => {
+      if (!k.startsWith('snip_')) return false;
+      const rec = check[k];
+      return !rec || rec.saved !== true;
+    });
+    if (remainingUnsaved.length === 0) {
       break;
     }
-    // 微小退避后重试
     await new Promise(r => setTimeout(r, 20));
   }
 }
@@ -264,11 +316,11 @@ async function clearAllSnippets() {
  * 获取记录列表（分批）
  * @param {number} offset - 起始位置
  * @param {number} limit - 每批数量
+ * @param {string} filter - 筛选类型 ('home' | 'saved' | 'all')
  * @returns {Promise<{records: Array, total: number}>}
  */
-async function getSnippets(offset = 0, limit = CONFIG.PAGE_SIZE) {
-  const orderData = await chrome.storage.local.get('snippets_order');
-  const order = orderData.snippets_order || [];
+async function getSnippets(offset = 0, limit = CONFIG.PAGE_SIZE, filter = 'home') {
+  const order = await getFilteredOrder(filter);
   const total = order.length;
 
   const pageIds = order.slice(offset, offset + limit);
@@ -279,13 +331,13 @@ async function getSnippets(offset = 0, limit = CONFIG.PAGE_SIZE) {
 }
 
 /**
- * 获取全部记录（用于导出）。分批读取，避免一次性 get 大量 key。
+ * 获取记录（用于导出）。分批读取，避免一次性 get 大量 key。
  * 返回结果按 capturedAt 升序（最早在前）。
+ * @param {string} filter - 筛选类型 ('home' | 'saved' | 'all')
  * @returns {Promise<Array>}
  */
-async function getAllSnippets() {
-  const orderData = await chrome.storage.local.get('snippets_order');
-  const order = orderData.snippets_order || [];
+async function getAllSnippets(filter = 'all') {
+  const order = await getFilteredOrder(filter);
 
   const allRecords = [];
   for (let i = 0; i < order.length; i += CONFIG.EXPORT_BATCH_SIZE) {
@@ -298,6 +350,46 @@ async function getAllSnippets() {
   // 按时间正序排列（最早在前）
   allRecords.sort((a, b) => a.capturedAt - b.capturedAt);
   return allRecords;
+}
+
+/**
+ * 切换记录的收藏状态
+ * @param {string} id 记录 ID
+ * @returns {Promise<{action: string, record?: object, id?: string}|null>}
+ */
+async function toggleFavoriteSnippet(id) {
+  const key = `snip_${id}`;
+  const data = await chrome.storage.local.get(key);
+  const record = data[key];
+  if (!record) return null;
+
+  record.saved = !record.saved;
+  // 如果取消收藏，且该记录之前已被清空过（clearedFromHome=true），则将其彻底清理避免孤儿残留
+  if (!record.saved && record.clearedFromHome) {
+    await deleteSnippet(id);
+    return { action: 'deleted', id };
+  } else {
+    await chrome.storage.local.set({ [key]: record });
+    return { action: 'updated', record };
+  }
+}
+
+/**
+ * 编辑笔记的主体内容
+ * @param {string} id 记录 ID
+ * @param {string} newText 修改后的文本
+ * @returns {Promise<object|null>}
+ */
+async function updateSnippetText(id, newText) {
+  const key = `snip_${id}`;
+  const data = await chrome.storage.local.get(key);
+  const record = data[key];
+  if (!record) return null;
+
+  record.text = newText.trim();
+  record.updatedAt = Date.now();
+  await chrome.storage.local.set({ [key]: record });
+  return record;
 }
 
 /**
@@ -318,9 +410,8 @@ async function setCollectEnabled(enabled) {
 /**
  * 获取最早记录时间（用于清空确认提示）
  */
-async function getEarliestDate() {
-  const orderData = await chrome.storage.local.get('snippets_order');
-  const order = orderData.snippets_order || [];
+async function getEarliestDate(filter = 'home') {
+  const order = await getFilteredOrder(filter);
   if (order.length === 0) return null;
 
   // order 是最新在前，因此最后一条即最早记录
@@ -384,6 +475,11 @@ async function importSnippets(snippets) {
       domain,
       capturedAt: snip.capturedAt,
       lastSelectedAt,
+      saved: snip.saved === true ? true : undefined,
+      clearedFromHome: snip.clearedFromHome === true ? true : undefined,
+      updatedAt: (typeof snip.updatedAt === 'number' && Number.isFinite(snip.updatedAt))
+        ? snip.updatedAt
+        : undefined,
     };
     existingKeys.add(key);
     imported++;
@@ -418,9 +514,8 @@ async function importSnippets(snippets) {
  * 均匀采样（P2）：当记录数远大于采样数时，不再只取前 50 条（可能全为短/长文本导致偏差），
  * 而是按步长均匀抽取，使平均值更接近全量。
  */
-async function getStorageEstimate() {
-  const orderData = await chrome.storage.local.get('snippets_order');
-  const order = orderData.snippets_order || [];
+async function getStorageEstimate(filter = 'home') {
+  const order = await getFilteredOrder(filter);
   if (order.length === 0) return 0;
 
   const sampleSize = Math.min(CONFIG.STORAGE_ESTIMATE_SAMPLES, order.length);

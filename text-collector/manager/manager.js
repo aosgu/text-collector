@@ -33,6 +33,7 @@ let newRecordsCount = 0;
 let newRecordTimer = null;
 // 本地修改（删除/清空/导入/撤销）期间置为 true，抑制 onChanged 的重复追加
 let ignoreAllOrderChanges = false;
+let currentTab = 'home';
 
 // ── 状态读写通道 ──
 // 通过函数参数/回调把状态读写给 render.js 等模块，避免跨文件共享可变变量。
@@ -46,6 +47,7 @@ function getLoadedCount() { return currentOffset; }
 function getTotalCount() { return totalCount; }
 function getLoading() { return isLoading; }
 function isIgnoreOrderChanges() { return ignoreAllOrderChanges; }
+function getCurrentTab() { return currentTab; }
 
 /** currentOffset += n（默认 1）：loadMore 翻页、onChanged 每插入一张新卡片 */
 function incrementLoaded(n = 1) { currentOffset += n; }
@@ -68,7 +70,7 @@ function setLoading(bool) { isLoading = bool; }
 function setIgnoreOrderChanges(bool) { ignoreAllOrderChanges = bool; }
 
 const listBridge = {
-  getLoadedCount, getTotalCount, getLoading,
+  getLoadedCount, getTotalCount, getLoading, getCurrentTab,
   incrementLoaded, decrementLoaded, resetLoaded,
   setTotalCount, incrementTotal, decrementTotal,
   setLoading, setIgnoreOrderChanges,
@@ -120,7 +122,7 @@ async function handleToggle() {
 
 // ── 清空全部 ──
 async function handleClearAll() {
-  const earliestDate = await getEarliestDate();
+  const earliestDate = await getEarliestDate(currentTab);
   const dateStr = earliestDate
     ? new Date(earliestDate).toLocaleDateString('zh-CN')
     : '';
@@ -203,6 +205,29 @@ function setupListeners() {
       handleToggle();
     }
   });
+
+  const $tabHome = document.getElementById('tab-home');
+  const $tabSaved = document.getElementById('tab-saved');
+
+  const handleTabSwitch = async (tabName) => {
+    if (currentTab === tabName) return;
+    currentTab = tabName;
+    if ($tabHome) {
+      $tabHome.classList.toggle('active', tabName === 'home');
+      $tabHome.setAttribute('aria-selected', tabName === 'home' ? 'true' : 'false');
+    }
+    if ($tabSaved) {
+      $tabSaved.classList.toggle('active', tabName === 'saved');
+      $tabSaved.setAttribute('aria-selected', tabName === 'saved' ? 'true' : 'false');
+    }
+    if ($btnClear) {
+      $btnClear.classList.toggle('hidden', tabName === 'saved');
+    }
+    await loadFirstPage(listBridge);
+  };
+
+  if ($tabHome) $tabHome.addEventListener('click', () => handleTabSwitch('home'));
+  if ($tabSaved) $tabSaved.addEventListener('click', () => handleTabSwitch('saved'));
 
   $btnClear.addEventListener('click', handleClearAll);
 

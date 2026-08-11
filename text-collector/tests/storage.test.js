@@ -12,6 +12,7 @@ import { readSource, extractFunction } from './helpers/load-source.js';
 const source = readSource('utils/storage.js');
 const { fn: getUrlKey } = extractFunction(source, 'getUrlKey');
 const { fn: getDomain } = extractFunction(source, 'getDomain');
+const { fn: filterOrderRecords } = extractFunction(source, 'filterOrderRecords');
 
 describe('getUrlKey', () => {
   it('常规 URL：origin + pathname（忽略 query 与 hash）', () => {
@@ -73,3 +74,34 @@ describe('getDomain', () => {
     expect(getDomain('')).toBe('unknown');
   });
 });
+
+describe('filterOrderRecords', () => {
+  const sampleOrder = ['1', '2', '3', '4'];
+  const sampleRecords = {
+    'snip_1': { id: '1', text: 'normal unsaved', saved: false },
+    'snip_2': { id: '2', text: 'saved note', saved: true },
+    'snip_3': { id: '3', text: 'cleared from home but saved', saved: true, clearedFromHome: true },
+    'snip_4': { id: '4', text: 'normal note 2' }
+  };
+
+  it('home 筛选：保留未在首页清零的记录（clearedFromHome !== true）', () => {
+    const res = filterOrderRecords(sampleOrder, sampleRecords, 'home');
+    expect(res).toEqual(['1', '2', '4']);
+  });
+
+  it('saved 筛选：只保留 saved === true 的记录', () => {
+    const res = filterOrderRecords(sampleOrder, sampleRecords, 'saved');
+    expect(res).toEqual(['2', '3']);
+  });
+
+  it('all 筛选：返回原完整顺序列表', () => {
+    const res = filterOrderRecords(sampleOrder, sampleRecords, 'all');
+    expect(res).toEqual(sampleOrder);
+  });
+
+  it('防错处理：非法 input 或空记录映射', () => {
+    expect(filterOrderRecords(null, sampleRecords, 'home')).toEqual([]);
+    expect(filterOrderRecords(['1', '99'], sampleRecords, 'home')).toEqual(['1']);
+  });
+});
+
