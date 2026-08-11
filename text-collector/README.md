@@ -4,7 +4,8 @@
 
 | 版本 | 变更内容 |
 |------|---------|
-| **v0.7.1** | **移除导入功能**：该功能缺少实际使用场景，故整体下线。删除管理页「导入」按钮与隐藏的 file input、`utils/storage.js` 的 `importSnippets()`、以及 `handleImport` / `handleImportFileChange`；`manager/import-export.js` 重命名为 `manager/export.js`（现仅含 `handleExport` / `downloadBlob`）。导出功能不受影响，导出的 JSON 结构保持不变。 |
+| **v0.7.2** | **更换扩展图标**：原图标为暖白底 + 细线蓝括号，底色与 Chrome 工具栏几乎同色、墨量不足 10%，16px 下括号退化成两个灰点，辨识度很低。新图标改为**实心品牌蓝圆角方 + 白色无衬线开引号**（斜切楔形，Inter 风格）：语义从抽象的「选中」转为更直白的「摘录 / 引用」；实心蓝底保证在浅色 `#DEE1E6` 与深色 `#292A2D` 工具栏上都是一块高对比色；无衬线楔形在 16px 下是两块实心色块，边缘干净不糊。16px **单独调参**（略收斜度 + 加宽 + 上下拉满），因为斜边在小尺寸会被抗锯齿吃掉墨量——直接缩放只剩 7.4%，补过后回到 9.8%，与 48/128 的视觉重量一致。图标改为**参数化生成**：`design/icon-spec.js`（定稿参数）→ `design/build-icon.js`（字形绘制）→ `node design/make-icons.js` 输出 SVG 源文件与 PNG；`node design/preview.js` 生成验收对比图，`node design/compare-serif-sans.js` 生成衬线/无衬线等墨量对比图。管理页 `.brand-mark` 与 `.empty-icon` 同步为新引号字形。 |
+| v0.7.1 | **移除导入功能**：该功能缺少实际使用场景，故整体下线。删除管理页「导入」按钮与隐藏的 file input、`utils/storage.js` 的 `importSnippets()`、以及 `handleImport` / `handleImportFileChange`；`manager/import-export.js` 重命名为 `manager/export.js`（现仅含 `handleExport` / `downloadBlob`）。导出功能不受影响，导出的 JSON 结构保持不变。 |
 | **v0.7.0** | **新增收藏与编辑功能（已保存页签及二次确认改造）**：1. 卡片左侧增加**收藏按钮**（书签图标 🔖），支持一键收藏/取消收藏；2. 管理页顶部新增「首页」与「已保存」**双页签导航**，点击可查看所有已保存的笔记；3. 改写「清空全部」逻辑，**首页清空**时彻底删除未收藏记录，而已保存笔记仍然保留（`clearedFromHome=true`）并在已保存页面继续显示；4. 针对已保存笔记，**删除时额外提供确认对话框**防止误删；5. 为已保存笔记增加底部**「复制」与「编辑」功能按钮**，点击「复制」快速写入系统剪贴板并提示 Toast；6. 新增**极简纯文字编辑弹窗** (`showEditModal`)，使用纯文本 `<textarea>` 安全编辑笔记内容并记录修改时间；7. 优化导入导出，支持随 JSON 完整恢复 `saved`、`clearedFromHome` 和 `updatedAt` 状态，并针对页签过滤导出文件。 |
 | **v0.6.3** | **全量审计 P1/P2 清零**：`adoptOrphanSnippets` 24h 节流 + `order为空强制扫描` + 缺`id`孤儿批量写回；`addSnippet` 写后校验重试(3次)收口并发覆写；`clearAllSnippets` 循环校验(3轮)兜底并发孤儿；`importSnippets` 分批写入(100/批) + order 单独合并；`getStorageEstimate` 均匀采样；`content` 追加 `isSelectionInEditable` 覆盖未聚焦 contenteditable；`detectDarkSurrounding` 支持 hsl/hsla；`render` 的 `loadMore` 加 `try/finally` + 删除撤销补 `incrementLoaded` + 卡片 `role` 由 `button` 改 `group` 消除嵌套告警；`import-export` 的 `handleExport` 加错误兜底；`manifest` 增 `tabs` 权限保证 `tabs.query` 兼容；移除已跟踪的 `.DS_Store` |
 | **v0.6.2** | **健壮性 + a11y 加固**：`importSnippets` 加类型守卫（坏记录不会再导致整批导入失败）；`deleteSnippet` 与 `addSnippet` 一致采用"删数据 → 重读 order → 写回"以缩小竞态窗口；清空确认弹窗默认焦点改为「取消」、Enter 键尊重当前焦点、加简易焦点陷阱与 `role="dialog"`/`aria-modal`；卡片支持 Tab 聚焦 + Enter/Space 键盘复制；展开按钮可键盘操作；导出菜单加 Escape/方向键导航、`aria-expanded`/`aria-haspopup`；toast 加 `role="status"`/`aria-live`；toast 宿主内联样式与 `content.css` 属性集同步；file input accept 加 MIME 兜底；清理 CSS 冗余选择器；注释与文档更新 |
@@ -89,7 +90,7 @@
 | 修改 toast 样式 / 图标 | `content/content.js` → `showToast()` 内 Shadow DOM 的 `<style>` 与 SVG；toast 宿主 light-DOM 几何样式同时在 `content/content.css` 与内联 `cssText` 两处，需同步修改 |
 | 修改管理页主题色 | `manager/manager.css` → `:root` 中的 CSS 变量 |
 | 修改快捷键 | `manifest.json` → `commands.toggle-collect.suggested_key`（注意：MV3 非全局快捷键，如需全局需加 `"global": true`） |
-| 修改图标 | 替换 `icons/` 下的 PNG 文件（16/48/128 需同步）；品牌 SVG 在 `manager.html` 与 `content.js` 的 badge 内联 SVG 中 |
+| 修改图标 | 改 `design/icon-spec.js` 的形状参数 → 跑 `node design/make-icons.js` 重新生成 `icons/` 下 PNG 与 `design/icon-src/` 下 SVG；管理页品牌 SVG 在 `manager.html` 的 `.brand-mark` 与 `.empty-icon` 中（需手动同步） |
 
 ## 安全说明
 

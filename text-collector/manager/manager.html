@@ -13,11 +13,12 @@
   <header class="toolbar">
     <div class="toolbar-left">
       <div class="brand">
-        <svg class="brand-mark" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <rect x="2" y="2" width="20" height="20" rx="5" fill="#fff" stroke="#e2ddd2"/>
-          <path d="M9 7.5c-1.2 0-2 .8-2 2v5c0 1.2.8 2 2 2" stroke="#2f6fed" stroke-width="1.7" stroke-linecap="round"/>
-          <path d="M15 7.5c1.2 0 2 .8 2 2v5c0 1.2-.8 2-2 2" stroke="#2f6fed" stroke-width="1.7" stroke-linecap="round"/>
-          <line x1="10.5" y1="12" x2="13.5" y2="12" stroke="#1c1d20" stroke-width="1.7" stroke-linecap="round"/>
+        <svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="0" y="0" width="24" height="24" rx="5.2" fill="#2f6fed"/>
+          <g fill="#ffffff">
+            <path transform="translate(2.25 7.31) scale(0.0862)" d="M 40 6 L 74 6 L 50 94 L 0 94 Z"/>
+            <path transform="translate(13.13 7.31) scale(0.0862)" d="M 40 6 L 74 6 L 50 94 L 0 94 Z"/>
+          </g>
         </svg>
         <span class="brand-name">采集器<span class="brand-sep">/</span><span class="brand-sub">manager</span></span>
         <span id="toolbar-count" class="toolbar-count" aria-live="polite"></span>
@@ -72,11 +73,12 @@
 
   <!-- 空状态 -->
   <div id="empty-state" class="empty-state hidden">
-    <svg class="empty-icon" viewBox="0 0 48 48" fill="none" aria-hidden="true">
-      <rect x="8" y="10" width="32" height="30" rx="6" fill="#fff" stroke="#e2ddd2"/>
-      <path d="M18 19c-1.7 0-3 1.3-3 3v6c0 1.7 1.3 3 3 3" stroke="#2f6fed" stroke-width="2" stroke-linecap="round"/>
-      <path d="M30 19c1.7 0 3 1.3 3 3v6c0 1.7-1.3 3-3 3" stroke="#2f6fed" stroke-width="2" stroke-linecap="round"/>
-      <line x1="21" y1="25" x2="27" y2="25" stroke="#1c1d20" stroke-width="2" stroke-linecap="round"/>
+    <svg class="empty-icon" viewBox="0 0 48 48" aria-hidden="true">
+      <rect x="2" y="2" width="44" height="44" rx="10" fill="#eaf1ff"/>
+      <g fill="#a9c3f6">
+        <path transform="translate(4.5 14.63) scale(0.1725)" d="M 40 6 L 74 6 L 50 94 L 0 94 Z"/>
+        <path transform="translate(26.25 14.63) scale(0.1725)" d="M 40 6 L 74 6 L 50 94 L 0 94 Z"/>
+      </g>
     </svg>
     <p class="empty-title" id="empty-title">还没有采集记录</p>
     <p class="empty-sub" id="empty-sub">去任意网页上选中一段文字，500ms 后会自动保存到这里。</p>
