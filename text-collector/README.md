@@ -1,101 +1,133 @@
-# 网页文字采集器 Chrome 插件
+# 网页文字采集器（text-collector）
 
-## 版本历史
+个人自用的 Chrome 扩展：在任意网页**选中文字即自动保存**，点击工具栏图标打开管理页，进行查看、复制、删除（可撤销）、收藏、编辑与导出。
 
-| 版本 | 变更内容 |
-|------|---------|
-| **v0.7.2** | **更换扩展图标**：原图标为暖白底 + 细线蓝括号，底色与 Chrome 工具栏几乎同色、墨量不足 10%，16px 下括号退化成两个灰点，辨识度很低。新图标改为**实心品牌蓝圆角方 + 白色无衬线开引号**（斜切楔形，Inter 风格）：语义从抽象的「选中」转为更直白的「摘录 / 引用」；实心蓝底保证在浅色 `#DEE1E6` 与深色 `#292A2D` 工具栏上都是一块高对比色；无衬线楔形在 16px 下是两块实心色块，边缘干净不糊。16px **单独调参**（略收斜度 + 加宽 + 上下拉满），因为斜边在小尺寸会被抗锯齿吃掉墨量——直接缩放只剩 7.4%，补过后回到 9.8%，与 48/128 的视觉重量一致。管理页 `.brand-mark` 与 `.empty-icon` 同步为新引号字形。 |
-| v0.7.1 | **移除导入功能**：该功能缺少实际使用场景，故整体下线。删除管理页「导入」按钮与隐藏的 file input、`utils/storage.js` 的 `importSnippets()`、以及 `handleImport` / `handleImportFileChange`；`manager/import-export.js` 重命名为 `manager/export.js`（现仅含 `handleExport` / `downloadBlob`）。导出功能不受影响，导出的 JSON 结构保持不变。 |
-| **v0.7.0** | **新增收藏与编辑功能（已保存页签及二次确认改造）**：1. 卡片左侧增加**收藏按钮**（书签图标 🔖），支持一键收藏/取消收藏；2. 管理页顶部新增「首页」与「已保存」**双页签导航**，点击可查看所有已保存的笔记；3. 改写「清空全部」逻辑，**首页清空**时彻底删除未收藏记录，而已保存笔记仍然保留（`clearedFromHome=true`）并在已保存页面继续显示；4. 针对已保存笔记，**删除时额外提供确认对话框**防止误删；5. 为已保存笔记增加底部**「复制」与「编辑」功能按钮**，点击「复制」快速写入系统剪贴板并提示 Toast；6. 新增**极简纯文字编辑弹窗** (`showEditModal`)，使用纯文本 `<textarea>` 安全编辑笔记内容并记录修改时间；7. 优化导入导出，支持随 JSON 完整恢复 `saved`、`clearedFromHome` 和 `updatedAt` 状态，并针对页签过滤导出文件。 |
-| **v0.6.3** | **全量审计 P1/P2 清零**：`adoptOrphanSnippets` 24h 节流 + `order为空强制扫描` + 缺`id`孤儿批量写回；`addSnippet` 写后校验重试(3次)收口并发覆写；`clearAllSnippets` 循环校验(3轮)兜底并发孤儿；`importSnippets` 分批写入(100/批) + order 单独合并；`getStorageEstimate` 均匀采样；`content` 追加 `isSelectionInEditable` 覆盖未聚焦 contenteditable；`detectDarkSurrounding` 支持 hsl/hsla；`render` 的 `loadMore` 加 `try/finally` + 删除撤销补 `incrementLoaded` + 卡片 `role` 由 `button` 改 `group` 消除嵌套告警；`import-export` 的 `handleExport` 加错误兜底；`manifest` 增 `tabs` 权限保证 `tabs.query` 兼容；移除已跟踪的 `.DS_Store` |
-| **v0.6.2** | **健壮性 + a11y 加固**：`importSnippets` 加类型守卫（坏记录不会再导致整批导入失败）；`deleteSnippet` 与 `addSnippet` 一致采用"删数据 → 重读 order → 写回"以缩小竞态窗口；清空确认弹窗默认焦点改为「取消」、Enter 键尊重当前焦点、加简易焦点陷阱与 `role="dialog"`/`aria-modal`；卡片支持 Tab 聚焦 + Enter/Space 键盘复制；展开按钮可键盘操作；导出菜单加 Escape/方向键导航、`aria-expanded`/`aria-haspopup`；toast 加 `role="status"`/`aria-live`；toast 宿主内联样式与 `content.css` 属性集同步；file input accept 加 MIME 兜底；清理 CSS 冗余选择器；注释与文档更新 |
-| **v0.6.1** | **修复选中后全屏乱码**：toast 宿主 light-DOM 被页面 CSS/`::before` iconfont 污染；恢复并强化 `content.css` 隔离 + 内联 `!important` 双重钉死；安全截断代理对；删除后分页 offset 修正；孤儿扫描健壮性；SW 冷启动 badge 同步 |
-| **v0.6** | **视觉重设计（方案 E · 轻霜 × Zed）**：暖白底 `#F5F3EE` + 衬线标题 + Zed 蓝 `#2F6FED`；新 logo（蓝括号 + 选中线）；管理页卡片细描边 + hover 上浮，左侧括号标记；toast 改为轻霜浮片（蓝勾徽标，浅/深页面自适应）；采集状态三态（成功/去重/失败）；删除按钮由 × 改为垃圾桶图标；toast 单实例、modal 键盘支持；orphan 扫描加一次性标记避免每次开页全量遍历 |
-| v0.5 | 采集准入规则（长度阈值 + 防抖延迟 + 扩选替换 + 纯符号过滤）；分片存储；单条复制 / 删除撤销 / JSON 导入；图标 badge 状态；浏览器内快捷键 |
+> 纯个人备忘 · 数据完全本地 · 零网络请求 · 不对外发布
 
-## 安装方式
+## 特性
+
+- **选中即存**：监听 `selectionchange` + 500ms 防抖，无需右键菜单、快捷键或复制粘贴
+- **智能准入**：长度阈值（中文 ≥5 字 / 英文 ≥3 词，加权混合）、过滤纯符号/纯数字/纯 URL、跳过输入框与可编辑区域
+- **去重与扩选合并**：同页同文本不重复保存；5 秒内扩选自动替换旧记录
+- **本地存储**：`chrome.storage.local` 分片存储，不发起任何网络请求
+- **记录管理**：分页列表、一键复制、删除可撤销（5 秒）、清空（二次确认）、收藏/已保存页签、编辑笔记
+- **导出备份**：TXT（UTF-8 BOM）/ JSON，按当前页签过滤
+- **采集开关**：管理页开关或快捷键 `Ctrl+Shift+S`，关闭时工具栏图标显示灰色 OFF
+- **键盘可达**：Tab 导航、焦点陷阱、aria 语义
+
+## 文档地图
+
+| 文档 | 说明 |
+|------|------|
+| [`docs/_facts.md`](../docs/_facts.md) | **当前事实源**：代码事实清单（页面/模块/操作/数据模型/接口/状态/权限/配置） |
+| [`docs/01-PRODUCT.md`](../docs/01-PRODUCT.md) | 产品文档：定义、目标用户、功能全景、非目标 |
+| [`docs/02-FEATURES.md`](../docs/02-FEATURES.md) | 功能规格：20 个功能，含交互流程、边界情况、置信度 |
+| [`docs/03-USER-FLOWS.md`](../docs/03-USER-FLOWS.md) | 用户流程：7 个关键流程的状态迁移 |
+| [`docs/04-ARCHITECTURE.md`](../docs/04-ARCHITECTURE.md) | 技术架构：模块划分、依赖、部署运行 |
+| [`docs/05-DATA-MODEL.md`](../docs/05-DATA-MODEL.md) | 数据模型：实体字段、接口清单、数据流向 |
+| [`docs/06-DECISIONS.md`](../docs/06-DECISIONS.md) | 技术决策记录（含待确认问题清单） |
+| [`docs/_diff-report.md`](../docs/_diff-report.md) | 旧 PRD / README 迭代说明 vs 当前代码的变更对照 |
+| [`docs/archive/`](../docs/archive/) | **历史文档，仅供追溯，不作为当前事实来源**（原始 PRD、旧 README 笔记） |
+
+> **迭代约定**：修改业务代码后请同步更新 `docs/_facts.md`；`docs/archive/` 禁止改动。
+
+## 安装
 
 1. 打开 Chrome，地址栏输入 `chrome://extensions`
 2. 右上角开启「开发者模式」
 3. 点击「加载已解压的扩展程序」
-4. 选择 `text-collector` 文件夹
+4. 选择本仓库的 `text-collector` 文件夹
 
-## 使用方式
+## 使用
 
 ### 采集
-- 在任意网页选中文本（中文 ≥ 5 字或英文 ≥ 3 词），500ms 后自动保存
-- 页面右上角会显示「已采集」轻量 toast（不影响页面布局与文字渲染）
-- 选中太短、纯符号、纯数字、纯 URL 不会保存
+
+- 在任意网页选中文本（中文 ≥5 字或英文 ≥3 词），500ms 后自动保存
+- 页面右上角显示采集反馈 toast（已采集 / 已采集过 / 采集失败）
+- 太短、纯符号、纯数字、纯 URL、输入框内的选中不会保存
 - 先选半句再扩选整句（5 秒内同页面），只保留最终结果
 
 ### 管理记录
-- 点击工具栏插件图标，打开管理页
-- 点击卡片（或 Tab 聚焦后按 Enter/Space）→ 复制到剪贴板
-- 点击「展开 ↓ / 收起 ↑」→ 切换文本截断
-- 点击 🗑 → 删除（5 秒内可撤销）
-- 「导出」→ TXT 或 JSON 格式
-- 「清空全部」→ 需二次确认（默认焦点在「取消」）
+
+- 点击工具栏插件图标打开管理页（已打开则直接聚焦）
+- 点击卡片文本 → 复制到剪贴板
+- 「展开 ↓ / 收起 ↑」切换长文截断
+- 🗑 删除（5 秒内可撤销）；已保存笔记删除需二次确认
+- 「导出」→ TXT 或 JSON（按当前页签过滤）
+- 「清空全部」→ 二次确认；已收藏记录保留在「已保存」页签
+- 🔖 收藏笔记；「编辑」修改已保存笔记内容
 
 ### 采集开关
+
 - 管理页右上角开关：一键暂停/恢复采集
-- 快捷键 `Ctrl+Shift+S`：在 Chrome 窗口内切换采集开关（非全局；需在 Chrome 前台生效）
-- 关闭后图标显示灰色 `OFF` 标记
-- 开关状态浏览器重启后保持
+- 快捷键 `Ctrl+Shift+S`：浏览器内切换（非全局快捷键，需 Chrome 前台生效）
+- 关闭后工具栏图标显示灰色 OFF
 
-### 键盘操作
-- `Tab` / `Shift+Tab`：在卡片、按钮、开关之间导航
-- `Enter` / `Space`：触发聚焦按钮 / 复制聚焦卡片 / 切换开关
-- `Esc`：关闭导出菜单 / 关闭确认弹窗
-- `↑` / `↓`：在导出菜单内移动焦点
+## 数据与隐私
 
-## 文件结构
+- 所有数据仅存于浏览器本地 `chrome.storage.local`（扩展申请了 `unlimitedStorage` 权限）
+- 扩展**不发起任何网络请求**：无远程同步、无统计上报、无第三方 API
+- 卸载扩展后数据丢失（无云备份）
+- 导出 JSON 仅作离线存档，**插件不提供导入恢复**
 
-| 文件 | 用途 |
-|------|------|
-| `manifest.json` | 扩展配置文件（MV3） |
-| `content/content.js` | 内容脚本：选中检测 + 防抖 + 准入规则 + Shadow DOM toast |
-| `content/content.css` | 内容脚本样式（仅作用于 toast 宿主 light-DOM 节点） |
-| `manager/manager.html` | 管理页 HTML |
-| `manager/manager.js` | 管理页入口：初始化 / 全局状态 / 事件绑定 / storage 实时订阅 / 开关与清空 |
-| `manager/render.js` | 管理页列表渲染：卡片创建 / 分页加载 / 计数 / 删除撤销 / 新记录 prepend / 错误态 |
-| `manager/toast.js` | 管理页 Toast（单实例）：`showToast` / `dismiss` / `ICON_*` 图标常量 |
-| `manager/modal.js` | 管理页确认弹窗：`showConfirmModal` |
-| `manager/export.js` | 管理页导出：`handleExport` / `downloadBlob` |
-| `manager/manager.css` | 管理页样式（暖白 + 衬线 + 品牌蓝） |
-| `background/service-worker.js` | 后台 SW：安装初始化 / 图标点击 / badge / 快捷键 |
-| `utils/storage.js` | 分片存储读写工具函数（content 与 manager 共用）+ `CONFIG` 常量 |
-| `icons/` | 扩展图标（16/48/128） |
+## 配置
+
+所有采集/存储/UI 阈值常量集中在 `utils/storage.js` 的 `CONFIG` 对象，优先改常量：
+
+| 常量 | 默认值 | 说明 |
+|------|--------|------|
+| `MIN_CHINESE_CHARS` | 5 | 中文最小字数（加权） |
+| `MIN_ENGLISH_WORDS` | 3 | 英文最小词数（加权） |
+| `DEBOUNCE_MS` | 500 | 采集防抖延迟 |
+| `PAGE_LOAD_GRACE_MS` | 2000 | 页面加载保护期 |
+| `MAX_TEXT_LENGTH` | 5000 | 单条最大字符数（超出截断） |
+| `EXPAND_REPLACE_WINDOW_MS` | 5000 | 同页扩选替换窗口 |
+| `DEDUP_CHECK_LIMIT` | 500 | 去重检查的最近记录数 |
+| `PAGE_SIZE` | 50 | 管理页分页大小 |
+| `EXPORT_BATCH_SIZE` | 100 | 导出分批读取大小 |
+| `STORAGE_WARNING_THRESHOLD` | 5000 | 存储警告条阈值（条数） |
+
+其他修改入口：主题色 → `manager/manager.css` `:root`；快捷键 → `manifest.json` `commands.toggle-collect`；图标 → `design/` 工具链（**勿手改 `icons/*.png`，那是生成产物**）。
+
+## 开发
+
+```
+text-collector/
+├── manifest.json          # MV3 配置（权限 / 快捷键 / 内容脚本声明）
+├── content/
+│   ├── content.js         # 内容脚本：选区监听 + 准入规则 + Shadow DOM toast
+│   └── content.css        # toast 宿主钉死样式（与内联样式双保险）
+├── manager/
+│   ├── manager.html       # 管理页
+│   ├── manager.js         # 入口 / 编排 / 状态（listBridge）
+│   ├── render.js          # 列表渲染 / 卡片 / 删除撤销
+│   ├── modal.js           # 确认 / 编辑弹窗
+│   ├── toast.js           # 单实例 toast
+│   ├── export.js          # TXT / JSON 导出
+│   └── manager.css        # 管理页样式
+├── background/
+│   └── service-worker.js  # 安装初始化 / 图标点击 / 快捷键 / badge
+├── utils/
+│   └── storage.js         # 分片存储工具 + CONFIG 常量
+├── icons/                 # 扩展图标（生成产物）
+└── tests/                 # vitest 单元测试（Node 环境）
+```
+
+- 测试：`cd text-collector && npm install && npm test`（vitest，55 用例：storage 16 + content 39）
+- 图标再生成：`cd design && npm install && npm run icons`（sharp 参数化生成）
+- 详细技术说明见上方「文档地图」
 
 ## 已知限制
 
 - `chrome://` 页面、扩展商店、内置 PDF 阅读器无法采集
-- 跨域 iframe 内文本无法采集
+- 跨域 iframe 内文本无法采集（`all_frames: false`）
 - closed Shadow DOM 内的选中文本可能无法采集
 - input / textarea / contenteditable 中的选中文本不采集（设计如此）
 - 纯日文假名 / 韩文（不含汉字）易被长度阈值过滤，若常用可在 `CONFIG` 中追加计数规则
 - 扩展卸载后数据丢失，建议定期导出 JSON 备份（导出文件仅作离线存档，插件不提供导入恢复）
 
-## 修改指南
+## License
 
-所有采集/存储/UI 阈值常量集中在 `utils/storage.js` 的 `CONFIG` 对象里，优先改常量。
+[MIT](../LICENSE)
 
-| 需求 | 修改位置 |
-|------|---------|
-| 调整最小长度阈值（中文/英文） | `utils/storage.js` → `CONFIG.MIN_CHINESE_CHARS` / `CONFIG.MIN_ENGLISH_WORDS` |
-| 调整防抖时间 | `utils/storage.js` → `CONFIG.DEBOUNCE_MS` |
-| 调整页面加载保护期 | `utils/storage.js` → `CONFIG.PAGE_LOAD_GRACE_MS` |
-| 调整扩选替换窗口 | `utils/storage.js` → `CONFIG.EXPAND_REPLACE_WINDOW_MS` |
-| 调整单条最大字符数 | `utils/storage.js` → `CONFIG.MAX_TEXT_LENGTH` |
-| 调整管理页分页大小 | `utils/storage.js` → `CONFIG.PAGE_SIZE` |
-| 修改 toast 样式 / 图标 | `content/content.js` → `showToast()` 内 Shadow DOM 的 `<style>` 与 SVG；toast 宿主 light-DOM 几何样式同时在 `content/content.css` 与内联 `cssText` 两处，需同步修改 |
-| 修改管理页主题色 | `manager/manager.css` → `:root` 中的 CSS 变量 |
-| 修改快捷键 | `manifest.json` → `commands.toggle-collect.suggested_key`（注意：MV3 非全局快捷键，如需全局需加 `"global": true`） |
-| 修改图标 | 直接替换 `icons/` 下的 PNG 文件；管理页品牌 SVG 在 `manager.html` 的 `.brand-mark` 与 `.empty-icon` 中（需手动同步） |
-
-## 安全说明
-
-- 所有来自网页的采集文本均通过 `textContent` 渲染，**不使用 `innerHTML`**
-- `innerHTML` 仅用于硬编码的 SVG 图标常量（`ICON_TRASH / ICON_CHECK / ICON_INFO / ICON_ALERT`，以及 toast badge 内联 SVG），不接受用户输入
-- Toast 内部 UI 位于 **closed Shadow DOM**，页面 CSS 无法污染内部节点；toast 宿主位于 light DOM，由 `content.css` + 内联 `!important` 双重钉死
-- CSP：`script-src 'self'; object-src 'self'`，不加载远程脚本
-- 权限：仅申请 `storage` / `unlimitedStorage` / `tabs`（用于聚焦已打开的管理页）/ `<all_urls>` host 权限，不申请 `scripting` / `webRequest` / `cookies` 等敏感权限
+版本历史见 [`docs/archive/legacy-notes.md`](../docs/archive/legacy-notes.md)（历史文档，仅供追溯）。
