@@ -33,6 +33,7 @@ let newRecordsCount = 0;
 let newRecordTimer = null;
 // 本地修改（删除/清空/导入/撤销）期间置为 true，抑制 onChanged 的重复追加
 let ignoreAllOrderChanges = false;
+let currentTab = 'home';
 
 // ── 状态读写通道 ──
 // 通过函数参数/回调把状态读写给 render.js 等模块，避免跨文件共享可变变量。
@@ -46,6 +47,7 @@ function getLoadedCount() { return currentOffset; }
 function getTotalCount() { return totalCount; }
 function getLoading() { return isLoading; }
 function isIgnoreOrderChanges() { return ignoreAllOrderChanges; }
+function getCurrentTab() { return currentTab; }
 
 /** currentOffset += n（默认 1）：loadMore 翻页、onChanged 每插入一张新卡片 */
 function incrementLoaded(n = 1) { currentOffset += n; }
@@ -68,7 +70,7 @@ function setLoading(bool) { isLoading = bool; }
 function setIgnoreOrderChanges(bool) { ignoreAllOrderChanges = bool; }
 
 const listBridge = {
-  getLoadedCount, getTotalCount, getLoading,
+  getLoadedCount, getTotalCount, getLoading, getCurrentTab,
   incrementLoaded, decrementLoaded, resetLoaded,
   setTotalCount, incrementTotal, decrementTotal,
   setLoading, setIgnoreOrderChanges,
@@ -120,7 +122,7 @@ async function handleToggle() {
 
 // ── 清空全部 ──
 async function handleClearAll() {
-  const earliestDate = await getEarliestDate();
+  const earliestDate = await getEarliestDate(currentTab);
   const dateStr = earliestDate
     ? new Date(earliestDate).toLocaleDateString('zh-CN')
     : '';
@@ -161,26 +163,30 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
       const newIds = newOrder.filter(id => !oldOrder.includes(id));
       if (newIds.length === 0) return;
 
-      newRecordsCount += newIds.length;
-      setTotalCount(newOrder.length);
-      updateRecordInfo(getTotalCount());
-
       chrome.storage.local
         .get(newIds.map(id => `snip_${id}`))
-        .then(recordsData => {
+        .then(async recordsData => {
           const sortedNewIds = newOrder.filter(id => newIds.includes(id));
-          // newOrder 中越靠前越新；prependNewCards 内从后往前 prepend，最新在顶部
-          prependNewCards(recordsData, sortedNewIds, listBridge, () => { incrementLoaded(); });
+          // 审计修复 P1-1：实时追加时，按当前 active 标签页 (currentTab) 筛选，防止在「已保存」页签中误入未收藏的新记录
+          const matchingIds = filterOrderRecords(sortedNewIds, recordsData, currentTab);
+          if (matchingIds.length > 0) {
+            newRecordsCount += matchingIds.length;
+            const filteredOrder = await getFilteredOrder(currentTab);
+            setTotalCount(filteredOrder.length);
+            updateRecordInfo(getTotalCount(), currentTab);
+
+            prependNewCards(recordsData, matchingIds, listBridge, () => { incrementLoaded(); });
+
+            $newRecordsHint.textContent = `新增了 ${newRecordsCount} 条记录`;
+            $newRecordsHint.classList.remove('hidden');
+
+            clearTimeout(newRecordTimer);
+            newRecordTimer = setTimeout(() => {
+              $newRecordsHint.classList.add('hidden');
+              newRecordsCount = 0;
+            }, 3000);
+          }
         });
-
-      $newRecordsHint.textContent = `新增了 ${newRecordsCount} 条记录`;
-      $newRecordsHint.classList.remove('hidden');
-
-      clearTimeout(newRecordTimer);
-      newRecordTimer = setTimeout(() => {
-        $newRecordsHint.classList.add('hidden');
-        newRecordsCount = 0;
-      }, 3000);
     }
   }
 });
@@ -203,6 +209,29 @@ function setupListeners() {
       handleToggle();
     }
   });
+
+  const $tabHome = document.getElementById('tab-home');
+  const $tabSaved = document.getElementById('tab-saved');
+
+  const handleTabSwitch = async (tabName) => {
+    if (currentTab === tabName) return;
+    currentTab = tabName;
+    if ($tabHome) {
+      $tabHome.classList.toggle('active', tabName === 'home');
+      $tabHome.setAttribute('aria-selected', tabName === 'home' ? 'true' : 'false');
+    }
+    if ($tabSaved) {
+      $tabSaved.classList.toggle('active', tabName === 'saved');
+      $tabSaved.setAttribute('aria-selected', tabName === 'saved' ? 'true' : 'false');
+    }
+    if ($btnClear) {
+      $btnClear.classList.toggle('hidden', tabName === 'saved');
+    }
+    await loadFirstPage(listBridge);
+  };
+
+  if ($tabHome) $tabHome.addEventListener('click', () => handleTabSwitch('home'));
+  if ($tabSaved) $tabSaved.addEventListener('click', () => handleTabSwitch('saved'));
 
   $btnClear.addEventListener('click', handleClearAll);
 

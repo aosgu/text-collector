@@ -14,15 +14,17 @@
 // ── 导出为 TXT（UTF-8 BOM）或 JSON ──
 async function handleExport(format) {
   try {
-    const records = await getAllSnippets();
+    const filter = typeof getCurrentTab === 'function' ? getCurrentTab() : 'all';
+    const records = await getAllSnippets(filter);
     const dateStr = new Date().toISOString().slice(0, 10);
+    const suffix = filter === 'saved' ? '_saved_' : '_';
 
     if (format === 'txt') {
       const texts = records.map(r => r.text);
       const content = texts.join('\n\n');
       const bom = '\uFEFF';
       const blob = new Blob([bom + content], { type: 'text/plain;charset=utf-8' });
-      downloadBlob(blob, `snippets_${dateStr}.txt`);
+      downloadBlob(blob, `snippets${suffix}${dateStr}.txt`);
     } else if (format === 'json') {
       const data = {
         schemaVersion: SCHEMA_VERSION,
@@ -31,7 +33,7 @@ async function handleExport(format) {
         snippets: records,
       };
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-      downloadBlob(blob, `snippets_${dateStr}.json`);
+      downloadBlob(blob, `snippets${suffix}${dateStr}.json`);
     } else {
       showToast('未知导出格式', { kind: 'danger' });
       return;

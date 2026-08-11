@@ -37,11 +37,23 @@ async function loadMore(bridge) {
   if (bridge.getLoading()) return;
   bridge.setLoading(true);
   try {
-    const { records, total } = await getSnippets(bridge.getLoadedCount(), PAGE_SIZE);
+    const filter = bridge && typeof bridge.getCurrentTab === 'function' ? bridge.getCurrentTab() : 'home';
+    const { records, total } = await getSnippets(bridge.getLoadedCount(), PAGE_SIZE, filter);
     bridge.setTotalCount(total);
     bridge.incrementLoaded(records.length);
 
     if (records.length === 0 && bridge.getLoadedCount() === 0) {
+      const emptyTitle = document.getElementById('empty-title');
+      const emptySub = document.getElementById('empty-sub');
+      if (emptyTitle && emptySub) {
+        if (filter === 'saved') {
+          emptyTitle.textContent = '还没有已保存的笔记';
+          emptySub.textContent = '点击每条笔记卡片左侧的书签图标 🔖，即可将其保存到这里。';
+        } else {
+          emptyTitle.textContent = '还没有采集记录';
+          emptySub.textContent = '去任意网页上选中一段文字，500ms 后会自动保存到这里。';
+        }
+      }
       $emptyState.classList.remove('hidden');
       $loadMore.classList.add('hidden');
     } else {
@@ -59,7 +71,7 @@ async function loadMore(bridge) {
       $loadMore.classList.add('hidden');
     }
 
-    await updateRecordInfo(bridge.getTotalCount());
+    await updateRecordInfo(bridge.getTotalCount(), filter);
 
     if (bridge.getTotalCount() > CONFIG.STORAGE_WARNING_THRESHOLD) {
       $storageWarning.classList.remove('hidden');
@@ -78,8 +90,8 @@ async function loadMore(bridge) {
 // ── 计数显示 ──
 // 页面大标题下显示完整描述（条数 / 占用 KB / 排序方式），
 // 顶部 brand 旁显示极简等宽条数，滚动列表时也能看到。
-async function updateRecordInfo(totalCount) {
-  const sizeKB = await getStorageEstimate();
+async function updateRecordInfo(totalCount, filter = 'home') {
+  const sizeKB = await getStorageEstimate(filter);
   // 安全：totalCount / sizeKB 都是 number，不会产生 HTML 注入；sep span 为硬编码静态标签。
   // 若未来重构引入字符串变量，务必改用 DOM 构造或 textContent。
   $pageSub.innerHTML =
@@ -128,6 +140,53 @@ function createCard(record, bridge) {
     showToast('已复制', { kind: 'success' });
   };
 
+  // 1. 左侧收藏按钮（位于卡片左侧品牌缩进位置）
+  const favoriteBtn = document.createElement('button');
+  favoriteBtn.type = 'button';
+  favoriteBtn.className = 'card-favorite' + (record.saved ? ' active' : '');
+  favoriteBtn.title = record.saved ? '已保存（点击取消收藏）' : '收藏到“已保存”';
+  favoriteBtn.setAttribute('aria-label', record.saved ? '取消收藏' : '收藏这条笔记');
+  favoriteBtn.innerHTML = record.saved ? ICON_BOOKMARK_SOLID : ICON_BOOKMARK_OUTLINE;
+  favoriteBtn.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    const res = await toggleFavoriteSnippet(record.id);
+    if (res && res.record) {
+      record.saved = res.record.saved;
+    } else {
+      record.saved = false;
+    }
+    const isSaved = !!record.saved;
+    favoriteBtn.classList.toggle('active', isSaved);
+    favoriteBtn.title = isSaved ? '已保存（点击取消收藏）' : '收藏到“已保存”';
+    favoriteBtn.setAttribute('aria-label', isSaved ? '取消收藏' : '收藏这条笔记');
+    favoriteBtn.innerHTML = isSaved ? ICON_BOOKMARK_SOLID : ICON_BOOKMARK_OUTLINE;
+    showToast(isSaved ? '已添加到“已保存”' : '已取消收藏', { kind: isSaved ? 'success' : 'info' });
+
+    const currentTab = bridge && typeof bridge.getCurrentTab === 'function' ? bridge.getCurrentTab() : 'home';
+    if (currentTab === 'saved' && !isSaved) {
+      card.style.transition = 'opacity .18s ease, transform .18s ease';
+      card.style.opacity = '0';
+      card.style.transform = 'translateX(-12px)';
+      setTimeout(() => {
+        card.remove();
+        bridge.decrementTotal();
+        bridge.decrementLoaded();
+        updateRecordInfo(bridge.getTotalCount(), currentTab);
+        if (bridge.getTotalCount() === 0) {
+          const emptyTitle = document.getElementById('empty-title');
+          const emptySub = document.getElementById('empty-sub');
+          if (emptyTitle && emptySub) {
+            emptyTitle.textContent = '还没有已保存的笔记';
+            emptySub.textContent = '点击每条笔记卡片左侧的书签图标 🔖，即可将其保存到这里。';
+          }
+          $emptyState.classList.remove('hidden');
+          $loadMore.classList.add('hidden');
+        }
+      }, 180);
+    }
+  });
+  card.appendChild(favoriteBtn);
+
   const textEl = document.createElement('div');
   textEl.className = 'card-text';
   textEl.textContent = record.text; // 安全：textContent，禁止改为 innerHTML
@@ -169,6 +228,52 @@ function createCard(record, bridge) {
   });
   card.appendChild(deleteBtn);
 
+  // 2. 针对已保存的笔记（或“已保存”页面中），新增“复制”与“编辑”按钮（需求 5）
+  const isSavedTab = bridge && typeof bridge.getCurrentTab === 'function' && bridge.getCurrentTab() === 'saved';
+  if (record.saved || isSavedTab) {
+    const actionsEl = document.createElement('div');
+    actionsEl.className = 'card-actions';
+
+    const copyBtn = document.createElement('button');
+    copyBtn.type = 'button';
+    copyBtn.className = 'btn-card-action btn-copy';
+    copyBtn.title = '复制笔记内容到剪贴板';
+    copyBtn.textContent = '复制';
+    copyBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      copyText();
+    });
+
+    const editBtn = document.createElement('button');
+    editBtn.type = 'button';
+    editBtn.className = 'btn-card-action btn-edit';
+    editBtn.title = '编辑已保存的笔记';
+    editBtn.textContent = '编辑';
+    editBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      showEditModal('编辑已保存的笔记', record.text, async (newText) => {
+        const trimmed = newText.trim();
+        if (!trimmed) {
+          showToast('笔记内容不能为空', { kind: 'danger' });
+          return;
+        }
+        if (trimmed === record.text) return;
+
+        record.text = trimmed;
+        record.updatedAt = Date.now();
+        await updateSnippetText(record.id, trimmed);
+
+        textEl.textContent = trimmed;
+        applyTruncationCheck(card);
+        showToast('已保存修改', { kind: 'success' });
+      });
+    });
+
+    actionsEl.appendChild(copyBtn);
+    actionsEl.appendChild(editBtn);
+    card.appendChild(actionsEl);
+  }
+
   // 卡片键盘：Enter/Space 在焦点于卡片本身（非内部按钮）时触发复制
   card.addEventListener('keydown', (e) => {
     const target = e.target;
@@ -184,6 +289,22 @@ function createCard(record, bridge) {
 
 // ── 删除（带撤销） ──
 async function deleteRecord(record, card, bridge) {
+  const isSavedTab = bridge && typeof bridge.getCurrentTab === 'function' && bridge.getCurrentTab() === 'saved';
+  // 需求 4：保存的笔记删除时增加一步确认
+  if (record.saved || isSavedTab) {
+    showConfirmModal(
+      '确认删除',
+      '确定要彻底删除这条已保存的笔记吗？此操作将永久删除该笔记。',
+      () => {
+        performDeleteRecord(record, card, bridge);
+      }
+    );
+    return;
+  }
+  await performDeleteRecord(record, card, bridge);
+}
+
+async function performDeleteRecord(record, card, bridge) {
   const { getTotalCount, getLoadedCount, incrementTotal, decrementTotal, decrementLoaded, incrementLoaded, setIgnoreOrderChanges } = bridge;
   const recordCopy = { ...record };
   const nextSibling = card.nextSibling;
@@ -193,6 +314,8 @@ async function deleteRecord(record, card, bridge) {
   const order = orderData.snippets_order || [];
   const originalIndex = order.indexOf(record.id);
 
+  const filter = bridge && typeof bridge.getCurrentTab === 'function' ? bridge.getCurrentTab() : 'home';
+
   card.style.transition = 'opacity .18s ease, transform .18s ease';
   card.style.opacity = '0';
   card.style.transform = 'translateX(-12px)';
@@ -201,7 +324,7 @@ async function deleteRecord(record, card, bridge) {
     card.remove();
     decrementTotal();  // totalCount = max(0, totalCount - 1)
     decrementLoaded(); // 已加载窗口收缩 1，避免后续 loadMore 从错误 offset 起读导致漏条/重条
-    updateRecordInfo(getTotalCount());
+    updateRecordInfo(getTotalCount(), filter);
     if (getTotalCount() === 0) {
       $emptyState.classList.remove('hidden');
       $loadMore.classList.add('hidden');
@@ -247,7 +370,7 @@ async function deleteRecord(record, card, bridge) {
         if (getLoadedCount() < getTotalCount()) {
           $loadMore.classList.remove('hidden');
         }
-        await updateRecordInfo(getTotalCount());
+        await updateRecordInfo(getTotalCount(), filter);
         showToast('已恢复', { kind: 'success' });
       } finally {
         setIgnoreOrderChanges(false);
