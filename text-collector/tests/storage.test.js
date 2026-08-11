@@ -103,5 +103,37 @@ describe('filterOrderRecords', () => {
     expect(filterOrderRecords(null, sampleRecords, 'home')).toEqual([]);
     expect(filterOrderRecords(['1', '99'], sampleRecords, 'home')).toEqual(['1']);
   });
+
+  it('多主题采集与清空分流场景：首页清空后采集新主题，首页列表与导出仅包含新主题，不夹带历史已收藏记录', () => {
+    // 1. 主题A采集了 1 和 2，其中 2 为已收藏。清空前，首页全集展示 ['1', '2']
+    const beforeClearOrder = ['1', '2'];
+    const beforeClearRecords = {
+      'snip_1': { id: '1', text: 'topic A note 1', saved: false },
+      'snip_2': { id: '2', text: 'topic A note 2 (saved)', saved: true }
+    };
+    expect(filterOrderRecords(beforeClearOrder, beforeClearRecords, 'home')).toEqual(['1', '2']);
+
+    // 2. 在首页执行「清空全部」后：未收藏的 '1' 被彻底删除；已收藏的 '2' 设置 clearedFromHome = true
+    const afterClearOrder = ['2'];
+    const afterClearRecords = {
+      'snip_2': { id: '2', text: 'topic A note 2 (saved)', saved: true, clearedFromHome: true }
+    };
+    // 此时首页完全清空（0 条）
+    expect(filterOrderRecords(afterClearOrder, afterClearRecords, 'home')).toEqual([]);
+    // 「已保存」页签仍然保留 '2'
+    expect(filterOrderRecords(afterClearOrder, afterClearRecords, 'saved')).toEqual(['2']);
+
+    // 3. 之后采集新的主题B（记录 5 和 6）
+    const topicBOrder = ['6', '5', '2'];
+    const topicBRecords = {
+      ...afterClearRecords,
+      'snip_5': { id: '5', text: 'topic B note 1', saved: false },
+      'snip_6': { id: '6', text: 'topic B note 2 (saved)', saved: true }
+    };
+    // 首页筛选及一键导出（filter = 'home'）：仅包含主题B的数据 ['6', '5']，不会夹带已清空的主题A收藏记录
+    expect(filterOrderRecords(topicBOrder, topicBRecords, 'home')).toEqual(['6', '5']);
+    // 切至「已保存」页签，可查看跨主题的全部历史收藏 ['6', '2']
+    expect(filterOrderRecords(topicBOrder, topicBRecords, 'saved')).toEqual(['6', '2']);
+  });
 });
 
