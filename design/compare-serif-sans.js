@@ -9,7 +9,7 @@
 const sharp = require('sharp');
 const path = require('path');
 const { buildIcon } = require('./build-icon.js');
-const { svgFor } = require('./icon-spec.js');
+const { FINE, BOLD } = require('./icon-spec.js');
 
 const OUT = path.join(__dirname, 'compare-serif-sans.png');
 
@@ -23,11 +23,17 @@ const sans = (comma, quoteW) => s => buildIcon({
   quoteCY: s * 62 / 128, quoteW: s * quoteW / 128, sans: true, comma,
 });
 
+// 衬线版（上一版方案）：48/128 用精细字形，16 用圆头描边加粗字形
+const serif = s => s === 16
+  ? buildIcon({ size: 16, pad: 0, radius: 3.4, quoteW: 6, gap: 1.5, quoteCY: 7.8, bold: true, comma: BOLD })
+  : buildIcon({ size: s, pad: 0, radius: s * 28 / 128, quoteW: s * 42 / 128,
+                gap: s * 10 / 128, quoteCY: s * 62 / 128, comma: FINE });
+
 const CANDS = [
-  { key: 'serif', name: 'SERIF  (current)', note: 'Garamond ball+tail', svg: s => svgFor(s) },
+  { key: 'serif', name: 'SERIF  (previous)', note: 'Garamond ball+tail', svg: serif },
   { key: 'n1', name: 'SANS N1  block',   note: 'DejaVu-like, near-vertical right edge',
     svg: sans({ top: 6, bot: 94, topL: 26, topR: 68, botL: 0, botR: 60 }, 42) },
-  { key: 'n3', name: 'SANS N3  slant',   note: 'Inter-like, stronger diagonal',
+  { key: 'n3', name: 'SANS N3  slant  ← FINAL', note: 'Inter-like, stronger diagonal',
     svg: sans({ top: 6, bot: 94, topL: 40, topR: 74, botL: 0, botR: 50 }, 46) },
   { key: 'n4', name: 'SANS N4  rounded', note: 'soft corners, friendliest',
     svg: sans({ top: 11, bot: 89, topL: 28, topR: 58, botL: 5, botR: 48, round: 12 }, 42) },

@@ -41,7 +41,7 @@ const txt = (s, size, color, w = W) =>
   let y = 0;
 
   // ── 标题 ──
-  comp.push({ input: txt('Text Collector — new icon (blue slab + white serif quotes)', 20, '#1c1d20'), top: y, left: 24 });
+  comp.push({ input: txt('Text Collector — new icon (blue slab + white sans quotes)', 20, '#1c1d20'), top: y, left: 24 });
   y += 40;
 
   // ── 工具栏模拟：浅色 / 深色 ──
@@ -61,7 +61,7 @@ const txt = (s, size, color, w = W) =>
   }
 
   // ── 三尺寸放大像素图 ──
-  comp.push({ input: txt('Pixel view — each size drawn separately (16px uses a bolder glyph)', 14, '#666'), top: y, left: 24 });
+  comp.push({ input: txt('Pixel view — 16px is tuned separately (wider + less slant to hold ink)', 14, '#666'), top: y, left: 24 });
   y += 24;
 
   const zooms = [

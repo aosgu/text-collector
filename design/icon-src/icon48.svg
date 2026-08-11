@@ -7,7 +7,7 @@
   </defs>
   <rect x="0" y="0" width="48" height="48" rx="11" fill="url(#g48)"/>
   <g fill="#ffffff">
-    <g transform="translate(6.2 15.5) scale(0.16)"><path fill-rule="nonzero" d="M 2 64 A 32 32 0 0 1 66 64 A 32 32 0 0 1 2 64 Z M 88 6 C 82 20, 72 34, 54 40 L 4.5 62 C 12 22, 58 2, 88 6 Z"/></g>
-    <g transform="translate(25.8 15.5) scale(0.16)"><path fill-rule="nonzero" d="M 2 64 A 32 32 0 0 1 66 64 A 32 32 0 0 1 2 64 Z M 88 6 C 82 20, 72 34, 54 40 L 4.5 62 C 12 22, 58 2, 88 6 Z"/></g>
+    <g transform="translate(4.5 14.63) scale(0.1725)"><path d="M 40 6 L 74 6 L 50 94 L 0 94 Z"/></g>
+    <g transform="translate(26.25 14.63) scale(0.1725)"><path d="M 40 6 L 74 6 L 50 94 L 0 94 Z"/></g>
   </g>
 </svg>
