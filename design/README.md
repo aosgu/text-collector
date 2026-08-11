@@ -58,3 +58,22 @@ OLD_ICONS_DIR=/tmp/oldicons node preview.js
 - `text-collector/manager/manager.html` → `.empty-icon`（空状态插画，48 viewBox）
 
 `content.js` toast 里的 SVG 是状态徽标（对勾 / 感叹号 / info），**不是**品牌标，不需要跟着改。
+
+## 无衬线实验
+
+`compare-serif-sans.png` 是衬线 vs 无衬线的对比图：
+
+```bash
+node design/compare-serif-sans.js
+```
+
+四个候选都调到**相同墨量**（128px 下白色像素占比 ≈ 9.6%）再比 ——
+否则「哪个更显眼」只是在比谁画得更粗，比不出字形差异。
+
+无衬线字形 `glyphSans()` 是照真字形量的，两个容易踩的坑：
+
+1. **开引号是下重上轻**。上宽下窄会读成「closing 99」，方向反了。
+2. **右边缘接近垂直**，只有左上角被斜切，不是左右对称的锥形。
+
+三个等墨量变体存在 `icon-spec.js` 里（`SANS_BLOCK` / `SANS_SLANT` / `SANS_ROUNDED`），
+想切换到无衬线，把 `SPECS` 里的 `comma` 换成对应常量并加 `sans: true` 即可。

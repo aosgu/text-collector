@@ -19,6 +19,14 @@ const FINE = {
   o2x: 12, o2y: 22,
 };
 
+// ── 无衬线字形（实验方案，未启用）──
+// 参考 DejaVu Sans / Inter 的开引号 U+201C：顶边短、右边近垂直、底边宽（下重上轻）。
+// 三个变体都调到与衬线版相同墨量（128px 下约 9.6%），便于公平对比。
+// 想改用无衬线：把下面 SPECS 里的 comma 换成 SANS_*，并加 sans: true。
+const SANS_BLOCK   = { top: 6,  bot: 94, topL: 26, topR: 68, botL: 0, botR: 60 };            // quoteW 42
+const SANS_SLANT   = { top: 6,  bot: 94, topL: 40, topR: 74, botL: 0, botR: 50 };            // quoteW 46
+const SANS_ROUNDED = { top: 11, bot: 89, topL: 28, topR: 58, botL: 5, botR: 48, round: 12 }; // quoteW 42
+
 // 16px 加粗字形（C3：陡峭尾巴，凹口最清晰）
 const BOLD = {
   cx: 34, cy: 70, r: 30,
@@ -41,4 +49,4 @@ function svgFor(size, extra = {}) {
   return buildIcon({ ...spec, ...extra });
 }
 
-module.exports = { SPECS, FINE, BOLD, svgFor };
+module.exports = { SPECS, FINE, BOLD, SANS_BLOCK, SANS_SLANT, SANS_ROUNDED, svgFor };

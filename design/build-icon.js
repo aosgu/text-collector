@@ -68,6 +68,46 @@ function glyphBold(p = {}) {
 }
 
 /**
+ * 无衬线字形。
+ * 参考 DejaVu Sans / Noto Sans / Inter 的开引号 U+201C 实际字形（见下）：
+ *
+ *   ┌──┐      短的顶边
+ *   │  │
+ *  ╱   │      左边斜切（chamfer），右边接近垂直
+ * └────┘      宽而平的底边  ← 重量在底部
+ *
+ * 两个关键点（都是照着真字形量出来的，不是凭感觉）：
+ *  1. **开引号是下重上轻**。上宽下窄读出来是「closing 99」，方向会反。
+ *  2. 右边缘接近垂直，只有左上角被斜切；不是左右对称的锥形。
+ *
+ * 用四个角点参数化，便于在「块状(DejaVu)」与「斜切(Inter)」之间连续调节。
+ * round > 0 时用等宽描边磨圆尖角（stroke-linejoin=round）。
+ */
+function glyphSans(p = {}) {
+  const {
+    top = 4,        // 顶边 y
+    bot = 96,       // 底边 y
+    topL = 30,      // 顶边左端 x（越大 → 左上角切得越狠）
+    topR = 62,      // 顶边右端 x
+    botL = 0,       // 底边左端 x
+    botR = 52,      // 底边右端 x
+    round = 0,      // 圆角量（0 = 尖角）
+  } = p;
+
+  const d =
+    `M ${topL} ${top} ` +
+    `L ${topR} ${top} ` +
+    `L ${botR} ${bot} ` +
+    `L ${botL} ${bot} Z`;
+
+  const stroke = round > 0
+    ? ` stroke="${INK}" stroke-width="${round}" stroke-linejoin="round"`
+    : '';
+
+  return `<path d="${d}"${stroke}/>`;
+}
+
+/**
  * 组装一枚完整图标的 SVG。
  */
 function buildIcon(opts) {
@@ -80,6 +120,7 @@ function buildIcon(opts) {
     quoteCY,
     gradient = true,
     bold = false,
+    sans = false,     // true → 无衬线楔形字形
     comma = {},
   } = opts;
 
@@ -89,7 +130,7 @@ function buildIcon(opts) {
   const totalW = quoteW * 2 + gap;
   const x0 = (size - totalW) / 2;
   const y0 = quoteCY - quoteH / 2;
-  const glyph = bold ? glyphBold(comma) : glyphFine(comma);
+  const glyph = sans ? glyphSans(comma) : bold ? glyphBold(comma) : glyphFine(comma);
 
   const fill = gradient ? `url(#g${size})` : BLUE;
   const defs = gradient
@@ -110,4 +151,4 @@ function buildIcon(opts) {
 `;
 }
 
-module.exports = { buildIcon, glyphFine, glyphBold, BLUE, BLUE_TOP, BLUE_BOT };
+module.exports = { buildIcon, glyphFine, glyphBold, glyphSans, BLUE, BLUE_TOP, BLUE_BOT };
