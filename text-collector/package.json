@@ -1,6 +1,6 @@
 {
   "name": "text-collector",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "private": true,
   "description": "网页文字采集器 Chrome 插件（MV3）— 含纯函数单元测试（vitest，Node 环境，无浏览器 API）",
   "type": "module",
