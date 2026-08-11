@@ -9,7 +9,7 @@
  *                    计数显示 / 删除撤销 / 新记录 prepend / 错误态）
  *   toast.js         单实例 Toast（showToast / dismiss / ICON_* 常量）
  *   modal.js         确认弹窗（showConfirmModal）
- *   import-export.js 导出 / 导入（handleExport / handleImport / downloadBlob）
+ *   export.js        导出（handleExport / downloadBlob）
  *
  * 状态约定：currentOffset / totalCount / isLoading / newRecordsCount /
  * newRecordTimer / ignoreAllOrderChanges 只在本文件内声明与读写；
@@ -31,7 +31,7 @@ let totalCount = 0;
 let isLoading = false;
 let newRecordsCount = 0;
 let newRecordTimer = null;
-// 本地修改（删除/清空/导入/撤销）期间置为 true，抑制 onChanged 的重复追加
+// 本地修改（删除/清空/撤销）期间置为 true，抑制 onChanged 的重复追加
 let ignoreAllOrderChanges = false;
 let currentTab = 'home';
 
@@ -66,7 +66,7 @@ function decrementTotal(n = 1) { totalCount = Math.max(0, totalCount - n); }
 /** isLoading = bool：loadMore 开始 / 结束 */
 function setLoading(bool) { isLoading = bool; }
 
-/** ignoreAllOrderChanges = bool：删除撤销 / 清空 / 导入的 try-finally 包裹 */
+/** ignoreAllOrderChanges = bool：删除撤销 / 清空的 try-finally 包裹 */
 function setIgnoreOrderChanges(bool) { ignoreAllOrderChanges = bool; }
 
 const listBridge = {
@@ -79,12 +79,10 @@ const listBridge = {
 // ── DOM（事件绑定 / onChanged 需要；渲染相关元素由各模块自持） ──
 const $btnLoadMore = document.getElementById('btn-load-more');
 const $btnClear = document.getElementById('btn-clear');
-const $btnImport = document.getElementById('btn-import');
 const $btnExport = document.getElementById('btn-export');
 const $exportMenu = document.getElementById('export-menu');
 const $collectToggle = document.getElementById('collect-toggle');
 const $newRecordsHint = document.getElementById('new-records-hint');
-const $fileInput = document.getElementById('file-input');
 
 // ── 初始化 ──
 async function init() {
@@ -189,15 +187,6 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
         });
     }
   }
-});
-
-// ── 导入（change 事件：选择文件后交给 import-export.js 处理） ──
-$fileInput.addEventListener('change', async (e) => {
-  await handleImportFileChange(e.target.files[0], {
-    onBeforeImport: () => { setIgnoreOrderChanges(true); },
-    onAfterImport: () => { setIgnoreOrderChanges(false); },
-    onImported: () => loadFirstPage(listBridge),
-  });
 });
 
 // ── 事件绑定 ──
@@ -308,7 +297,6 @@ function setupListeners() {
     }
   });
 
-  $btnImport.addEventListener('click', handleImport);
   $btnLoadMore.addEventListener('click', () => loadMore(listBridge));
 }
 
