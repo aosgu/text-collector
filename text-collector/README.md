@@ -13,6 +13,7 @@
 - **记录管理**：分页列表、一键复制、删除可撤销（5 秒）、清空（二次确认）、收藏/已保存页签、编辑笔记
 - **导出备份**：TXT（UTF-8 BOM）/ JSON，按当前页签过滤
 - **采集开关**：管理页开关或快捷键 `Ctrl+Shift+S`，关闭时工具栏图标显示灰色 OFF
+- **网站导航**：管理页头部导航图标，hover 展开网站快捷方式分栏面板（新标签页打开），站点列表由包内 `config/nav.json` 配置
 - **键盘可达**：Tab 导航、焦点陷阱、aria 语义
 
 ## 文档地图
@@ -56,6 +57,26 @@
 - 「导出」→ TXT 或 JSON（按当前页签过滤）
 - 「清空全部」→ 二次确认；已收藏记录保留在「已保存」页签
 - 🔖 收藏笔记；「编辑」修改已保存笔记内容
+
+### 网站导航
+
+- 管理页头部（品牌名右侧）的指南针图标：hover 展开快捷方式面板，点击快捷方式在新标签页打开
+- 站点列表**不在前端编辑**，直接改扩展目录里的 `config/nav.json`，刷新管理页即生效：
+
+```json
+{
+  "columns": [
+    {
+      "title": "常用",
+      "links": [
+        { "name": "GitHub", "url": "https://github.com" }
+      ]
+    }
+  ]
+}
+```
+
+- 每栏 `title` 可选；链接仅放行 http/https；文件缺失或无有效链接时图标自动隐藏
 
 ### 采集开关
 
@@ -101,10 +122,13 @@ text-collector/
 │   ├── manager.html       # 管理页
 │   ├── manager.js         # 入口 / 编排 / 状态（listBridge）
 │   ├── render.js          # 列表渲染 / 卡片 / 删除撤销
+│   ├── nav.js             # 网站导航（hover 面板 / 配置读取）
 │   ├── modal.js           # 确认 / 编辑弹窗
 │   ├── toast.js           # 单实例 toast
 │   ├── export.js          # TXT / JSON 导出
 │   └── manager.css        # 管理页样式
+├── config/
+│   └── nav.json           # 网站导航配置（后台文件配置，无前端编辑）
 ├── background/
 │   └── service-worker.js  # 安装初始化 / 图标点击 / 快捷键 / badge
 ├── utils/
@@ -113,7 +137,7 @@ text-collector/
 └── tests/                 # vitest 单元测试（Node 环境）
 ```
 
-- 测试：`cd text-collector && npm install && npm test`（vitest，55 用例：storage 16 + content 39）
+- 测试：`cd text-collector && npm install && npm test`（vitest，64 用例：storage 16 + content 39 + nav 9）
 - 图标再生成：`cd design && npm install && npm run icons`（sharp 参数化生成）
 - 详细技术说明见上方「文档地图」
 

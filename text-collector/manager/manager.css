@@ -247,6 +247,71 @@ body {
 }
 .dropdown-menu button:hover { background: var(--surface-2); }
 
+/* ── 网站导航（nav） ── */
+.nav { position: relative; }
+.btn-nav {
+  width: 32px;
+  padding: 0;
+}
+.btn-nav svg { display: block; }
+.nav.open .btn-nav {
+  background: var(--surface-2);
+  border-color: var(--border-strong);
+}
+/* 分栏面板：交互参考 zed.dev Resources，样式沿用本页设计变量 */
+.nav-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  display: flex;
+  align-items: stretch;
+  flex-wrap: wrap;
+  padding: 12px 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-card-hover);
+  z-index: 200;
+  max-width: min(92vw, 760px);
+  max-height: min(64vh, 520px);
+  overflow: auto;
+  animation: menuIn .14s ease;
+}
+.nav-col {
+  flex: 0 0 auto;
+  min-width: 128px;
+  padding: 2px 8px;
+  border-left: 1px solid var(--border);
+}
+.nav-col:first-child { border-left: none; }
+.nav-col-title {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  padding: 4px 8px 6px;
+}
+.nav-link {
+  display: block;
+  padding: 6px 8px;
+  border-radius: var(--radius-xs);
+  font-family: var(--serif);
+  font-size: 14.5px;
+  color: var(--text);
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background .1s, color .1s;
+}
+.nav-link:hover {
+  background: var(--blue-soft);
+  color: var(--blue-text);
+}
+.nav-link:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 1px;
+}
+
 /* ── 采集开关 ── */
 .toggle {
   display: inline-flex;
@@ -761,6 +826,20 @@ body {
   }
   .brand { margin-right: 4px; }
   .brand-sub { display: none; }
+  /* 窄屏：面板改为顶部全宽覆盖，栏目换行平铺 */
+  .nav-panel {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    max-width: none;
+    max-height: 70vh;
+    border-radius: 0;
+    border-top: none;
+    border-left: none;
+    border-right: none;
+  }
+  .nav-col { border-left: none; min-width: 45%; }
   .page-head { padding: 28px 18px 14px; }
   .page-title { font-size: 24px; }
   .list { padding: 8px 16px 24px; }
