@@ -1,0 +1,49 @@
+# 变更日志 — text-collector
+
+> 本文件记录 **v0.8.0 起**的版本变更；v0.5 – v0.7.2 的历史版本说明见 [`docs/archive/legacy-notes.md`](archive/legacy-notes.md)（历史文档，仅供追溯，禁止改动）。
+> 版本号与 `text-collector/manifest.json`、`text-collector/package.json` 保持一致。
+
+---
+
+## v0.8.0 — 管理页网站导航（2026-08-13）
+
+管理页被当作「新标签页」使用，本版为它补上类似 Chrome 新标签页固定网站快捷方式的能力。
+
+### 新增
+
+- **网站导航面板**（`manager/nav.js` + `config/nav.json`，管理页头部品牌名右侧的指南针图标）
+  - hover 图标展开分栏快捷方式面板（交互参考 zed.dev 顶部 Resources），点击快捷方式在新标签页打开（`target="_blank" rel="noopener"`）；
+  - 鼠标离开导航区域 200ms 宽限后收起（宽限期内可移入面板）；点击图标切换开合（触摸设备无 hover）；点击区域外、焦点离开导航区域自动收起；
+  - 键盘可达：图标上 Enter / Space / ↓ 展开并聚焦首个链接，Esc 收起并归还焦点，Tab 在链接间自然移动；
+  - 站点列表**不做前端编辑**，改扩展目录内的 `config/nav.json` 后刷新管理页即生效（unpacked 扩展无需重载扩展）。
+- **导航配置文件** `config/nav.json`：`{ "columns": [ { "title", "links": [ { "name", "url" } ] } ] }`；兼容糖：顶层 `links` 数组视为单个无标题栏。
+- **配置校验**（`normalizeNavConfig`，纯函数）：仅放行 `http:` / `https:` 协议（`javascript:` / `data:` / `chrome:` / 相对路径一律过滤），name / url / title 做 trim，空条目与无有效链接的栏整体移除；配置缺失、解析失败或无有效链接时导航图标整体隐藏，不影响管理页其余功能。
+- **单元测试**：`tests/nav.test.js` 9 个用例覆盖 `normalizeNavConfig`；测试总数 55 → **64**（storage 16 + content 39 + nav 9）。
+
+### 修复（v0.8.0 内）
+
+- **导航面板未能分栏**：`.nav-panel` 为 `position: absolute`，包含块是仅 32px 宽的 `.nav`，绝对定位元素的 shrink-to-fit 以此为可用宽度，宽度塌缩到 min-content；叠加 `flex-wrap: wrap` 后 flex 容器的 min-content 宽度等于最宽单栏宽度，导致第 2、3 栏被换行到第一栏下方。显式声明 `width: max-content` 让各栏并排，超出时仍由 `max-width: min(92vw, 760px)` 收窄换行；窄屏 `@media (max-width: 640px)` 的 `position: fixed` 全宽分支同步补 `width: auto` 覆盖。
+- **hover 图标浮出「网站导航」原生提示**：移除 `#btn-nav` 的 `title` 属性，保留 `aria-label="网站导航"`，无障碍语义不变。
+
+### 影响面
+
+- 存储结构、采集链路、导出格式**均无变化**（导航为纯读的包内配置，不写 `chrome.storage.local`）。
+- 唯一的 `fetch` 调用为读取扩展包内同源资源 `chrome-extension://.../config/nav.json`，**仍无任何外部网络请求**。
+- 权限清单不变（未新增 manifest 权限）。
+
+---
+
+## 历史版本
+
+v0.7.2 及更早版本的变更说明见 [`docs/archive/legacy-notes.md`](archive/legacy-notes.md)「版本历史」小节：
+
+| 版本 | 一句话摘要 |
+|------|-----------|
+| v0.7.2 | 更换扩展图标（实心品牌蓝圆角方 + 白色无衬线开引号，16px 单独调参） |
+| v0.7.1 | 移除导入功能（`import-export.js` → `export.js`） |
+| v0.7.0 | 收藏与编辑体系（已保存页签、二次确认、编辑弹窗、按页签导出） |
+| v0.6.3 | 全量审计 P1/P2 清零（孤儿节流、写后校验重试、清空循环校验等） |
+| v0.6.2 | 健壮性 + a11y 加固 |
+| v0.6.1 | 修复选中后全屏乱码（toast 宿主样式双重钉死） |
+| v0.6 | 视觉重设计（暖白 `#F5F3EE` + 衬线标题 + 品牌蓝 `#2F6FED`） |
+| v0.5 | 采集准入规则、分片存储、删除撤销、badge、快捷键 |

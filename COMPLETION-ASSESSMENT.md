@@ -1,5 +1,6 @@
 # 完成度评估报告 — text-collector v0.7.2
 
+> **时点快照，不随版本更新**：本报告评估的是 v0.7.2，v0.8.0 起的变更见 [`docs/CHANGELOG.md`](docs/CHANGELOG.md)，当前事实以 [`docs/_facts.md`](docs/_facts.md) 为准。
 > 评估日期：2026-08-11（UTC）· 评估基线：`main` @ `12440c8`（本分支 `arena/019ff1d0-text-collector`）
 > 评估方式：全量静态源码审查（约 3,750 行 JS/CSS/HTML）+ `npm test` 实测（vitest 55 用例）+ 文档与代码交叉核对
 > 约束遵守：**未修改任何业务代码**（本报告为新增文档，`git status` 干净）

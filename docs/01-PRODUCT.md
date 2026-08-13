@@ -1,6 +1,6 @@
 # 产品文档 — 网页文字采集器（Chrome 扩展）
 
-> 依据：`docs/_facts.md`（代码事实清单）及当前代码快照（commit `1c1f9ee` 之后）。
+> 依据：`docs/_facts.md`（代码事实清单）及当前代码快照（v0.8.0，2026-08-13）。
 > 本文件只描述代码中可证明存在的产品事实，不参考 `docs/archive/`。
 > 置信度：**高** = 代码直接证明；**中** = 由代码/注释推断；**低** = 推测。
 
@@ -8,7 +8,7 @@
 
 ## 一句话定义产品
 
-**网页文字采集器** 是一个 Chrome Manifest V3 浏览器扩展：在任意网页上**选中文字即自动保存**为本地采集记录，并可通过工具栏图标打开管理页，对记录进行**查看、复制、删除（可撤销）、导出、收藏、编辑**。
+**网页文字采集器** 是一个 Chrome Manifest V3 浏览器扩展：在任意网页上**选中文字即自动保存**为本地采集记录，并可通过工具栏图标打开管理页，对记录进行**查看、复制、删除（可撤销）、导出、收藏、编辑**；管理页同时承担「新标签页」角色，头部提供**网站导航快捷方式面板**（v0.8.0）。
 
 （来源：`manifest.json` name/description；`content/content.js`；`manager/manager.html`）
 
@@ -18,9 +18,9 @@
 
 | 推断 | 推断依据（代码事实） |
 |------|----------------------|
-| 单机、本地、个人用户（无账号、无云同步） | 无任何账号/登录/角色代码；无任何网络请求（grep 无 fetch/XHR/WebSocket）；数据仅存 `chrome.storage.local` |
+| 单机、本地、个人用户（无账号、无云同步） | 无任何账号/登录/角色代码；无任何**外部**网络请求（grep 无 XHR/WebSocket；唯一 `fetch` 读扩展包内 `config/nav.json`，chrome-extension:// 同源）；数据仅存 `chrome.storage.local` |
 | 需要频繁摘录网页文字的桌面 Chrome 用户 | 核心交互为「选中即存」；`manifest.json` 未声明 `"action": {"default_popup"}`，管理页以整页打开 |
-| 对数据隐私敏感的用户 | 零网络请求 + `unlimitedStorage` 本地存储 + CSP `script-src 'self'` |
+| 对数据隐私敏感的用户 | 零外部网络请求 + `unlimitedStorage` 本地存储 + CSP `script-src 'self'` |
 | 中文内容使用者 | 管理页 `lang="zh-CN"`、toast/弹窗/提示文案均为中文 |
 
 ## 核心价值
@@ -28,9 +28,10 @@
 1. **选中即存，无需任何额外操作**：监听 `selectionchange` + 500ms 防抖（`CONFIG.DEBOUNCE_MS`）自动保存，不需要右键菜单、快捷键或复制粘贴（`content/content.js`）。
 2. **自动过滤噪声**：长度阈值（中文 ≥5 字 / 英文 ≥3 词加权）、纯符号、纯数字、纯 URL 过滤、可编辑区域跳过，避免存下垃圾记录（`content/content.js` 准入规则）。
 3. **去重与扩选合并**：同 URL 完全相同的文本不重复入库；5 秒内扩选自动替换旧记录（`utils/storage.js` `addSnippet`）。
-4. **数据完全本地化**：`chrome.storage.local` + `unlimitedStorage`，扩展不发起任何网络请求；导出 JSON/TXT 可自行备份（`manifest.json`、`manager/export.js`）。
+4. **数据完全本地化**：`chrome.storage.local` + `unlimitedStorage`，扩展不发起任何**外部**网络请求（唯一 `fetch` 读包内导航配置，同源）；导出 JSON/TXT 可自行备份（`manifest.json`、`manager/export.js`）。
 5. **记录可管理**：分页浏览、实时追加、一键复制、删除撤销、收藏/已保存页签、编辑、清空、导出（`manager/*`）。
-6. **健壮性设计**：孤儿记录自动收领、并发写竞态校验重试、toast 样式与页面隔离、键盘可达（`utils/storage.js`、`content/content.js`）。
+6. **管理页兼作新标签页**：头部导航图标 hover 展开网站快捷方式分栏面板，站点列表由包内 `config/nav.json` 配置（v0.8.0；`manager/nav.js`）。
+7. **健壮性设计**：孤儿记录自动收领、并发写竞态校验重试、toast 样式与页面隔离、键盘可达（`utils/storage.js`、`content/content.js`）。
 
 ## 功能全景图
 
@@ -55,17 +56,19 @@
 | 17 | 打开/聚焦管理页 | `background/service-worker.js` | 图标点击：已开则聚焦，未开则新开 |
 | 18 | 键盘可达与无障碍 | `render.js` / `modal.js` / `manager.js` | Tab 导航、焦点陷阱、aria 属性 |
 | 19 | 响应式与减弱动效 | `manager/manager.css` | ≤640px 布局调整、`prefers-reduced-motion` |
-| 20 | 单元测试 | `tests/`（vitest，55 用例） | 纯函数在 Node 环境验证 |
+| 20 | 单元测试 | `tests/`（vitest，64 用例） | 纯函数在 Node 环境验证 |
+| 21 | 网站导航（v0.8.0 新增） | `manager/nav.js` + `config/nav.json`（头部 `#btn-nav`） | hover 展开分栏快捷方式面板，新标签页打开；配置文件驱动，无效配置时图标隐藏 |
 
 ## 非目标（明确不做什么）
 
 | 非目标 | 代码依据 |
 |--------|----------|
 | **不做导入功能**（导出数据不可恢复回扩展） | 导入功能已删除（用户确认）；当前代码无任何导入实现，导出 JSON 无对应解析器 |
-| **不做任何网络/云能力**：无远程同步、无备份服务、无第三方 API | 全库无 `fetch`/`XMLHttpRequest`/`WebSocket`/`sendMessage` 调用 |
+| **不做任何网络/云能力**：无远程同步、无备份服务、无第三方 API | 全库无 `XMLHttpRequest`/`WebSocket`/`sendMessage` 调用；唯一 `fetch`（`manager/nav.js`）只读扩展包内 `config/nav.json`，不产生对外流量 |
 | **不做账号体系**：无登录、无角色、无多用户 | 无相关代码；数据全部本地 |
 | **不采集可编辑区域内的文本**（input / textarea / contenteditable，含 Shadow DOM 内） | `content.js` `isEditableElement` / `isSelectionInEditable`，注释：「避免捕获用户在输入框里的文本选择」 |
 | **不在 iframe 内采集** | `manifest.json` content_scripts `"all_frames": false` |
 | **不做工具栏弹窗（popup）** | `manifest.json` `"action": {}` 无 `default_popup`，点击图标打开整页管理页 |
 | **不做后台页面**（MV3 无 background page） | `manifest.json` 仅声明 `service_worker` |
 | **不展示来源标题/URL/时间**等元数据到卡片 | `createCard`（`render.js`）仅渲染文本内容与操作按钮；元数据仅存于 `snip_<id>` 记录字段 |
+| **网站导航不做前端编辑**（无「添加/删除快捷方式」UI，不读写 storage） | `manager/nav.js` 仅 `fetch` 包内 `config/nav.json` 渲染；无任何写入路径（v0.8.0 决策 F1） |

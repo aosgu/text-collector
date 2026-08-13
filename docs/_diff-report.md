@@ -2,7 +2,7 @@
 
 > 对照基准：
 > - 旧文档：`docs/archive/original-PRD.md`（PRD v0.5，2026-08-10）、`docs/archive/legacy-notes.md`（README 版本历史 v0.5–v0.7.2 等）
-> - 当前代码：commit `fb3eee8` 之后的工作区快照（`_facts.md` 同源）
+> - 当前代码：v0.8.0 工作区快照，2026-08-13（`_facts.md` 同源）
 > - 用途：只做差异对照；本报告不改动 docs/01~06。
 > 证据格式：`文件:位置` 或 grep 结论。
 
@@ -105,6 +105,19 @@
 
 ## 3. 代码里有、旧 PRD 没有 → 迭代中新增
 
+### 3.0 功能层（v0.8.0 网站导航）
+
+| 新增能力 | 代码证据 | 迭代来源 |
+|----------|----------|----------|
+| 管理页头部网站导航图标 + hover 分栏快捷方式面板 | `manager/nav.js` `initNav`/`renderNavPanel`；`manager.html` `#nav-root`/`#btn-nav`/`#nav-panel`；`manager.css` `.nav*` | v0.8.0 |
+| 包内导航配置文件（无前端编辑） | `config/nav.json` + `loadNavConfig`（`fetch(chrome.runtime.getURL(...))`） | v0.8.0 |
+| 导航配置校验/规范化（http/https 白名单、trim、空栏移除） | `normalizeNavConfig`（纯函数，`tests/nav.test.js` 9 例） | v0.8.0 |
+| 导航键盘可达（Enter/Space/↓ 展开、Esc 收起归还焦点、focusin 兜底） | `nav.js` keydown / focusin 监听 | v0.8.0 |
+| 配置无效时导航入口整体隐藏，不影响主功能 | `initNav` 分支 + 底部 `.catch` 兜底 | v0.8.0 |
+| 面板分栏并排修复（`width: max-content`）与移除原生 tooltip | `manager.css` `.nav-panel`；`manager.html` `#btn-nav` 去 `title` | v0.8.0 |
+
+> 与 PRD 的关系：旧 PRD（v0.5）无「管理页兼作新标签页」设想，本项为**纯迭代新增**，非 PRD 遗漏项。
+
 ### 3.1 功能层（v0.7.0 收藏与编辑体系）
 
 | 新增能力 | 代码证据 | 迭代来源 |
@@ -156,7 +169,7 @@
 | 图标更换（品牌蓝圆角方 + 无衬线开引号） | `icons/*.png` + `design/` 参数化工具链（sharp） | v0.7.2 |
 | 响应式布局 `@media (max-width: 640px)`（含触摸设备删除按钮常驻） | `manager.css` L752 | 迭代新增（PRD v0.4 曾将移动端适配移至 P2；当前以响应式 CSS 形态部分落地） |
 | `prefers-reduced-motion` 减弱动效 | `manager.css` L776 | 迭代新增 |
-| 测试体系（vitest + 语法提取纯函数，55 用例） | `tests/` + `vitest.config.js` + `package.json` | 迭代新增（PRD 无测试相关内容） |
+| 测试体系（vitest + 语法提取纯函数，64 用例） | `tests/` + `vitest.config.js` + `package.json` | 迭代新增（PRD 无测试相关内容；v0.8.0 起含 nav 9 例） |
 | 删除撤销时 `ignoreAllOrderChanges` 抑制 onChanged | `manager.js` | 迭代新增 |
 | `listBridge` 状态通道（状态修改收敛命名函数） | `manager.js` 头部约定 | 模块拆分时新增 |
 | 管理页模块拆分（render/toast/modal/export 独立文件） | `manager/` 目录结构（PRD §4.3 仅 manager.js 单文件） | 迭代新增 |
@@ -205,6 +218,6 @@
 - **保留**：PRD v0.5 全部 P0 功能点 + 多数 P1（24 项管理/采集条目 + 技术方案），删除/导入除外。
 - **已删除**：导入功能全家（按钮、`importSnippets`、file input、导入验收项）——v0.7.1。
 - **未实现**：`about:blank`「未知页面」标记（PRD 写了但从未实现）；Shadow DOM 采集（PRD 主动降级）；性能/兼容性验收项（无法代码验证，待确认）。
-- **迭代新增**：收藏/编辑/双页签体系（v0.7.0）、孤儿扫描与并发校验（v0.6.x）、无障碍与键盘支持、视觉重设计、响应式、测试体系、`tabs` 权限、图标工具链。
+- **迭代新增**：网站导航（v0.8.0）、收藏/编辑/双页签体系（v0.7.0）、孤儿扫描与并发校验（v0.6.x）、无障碍与键盘支持、视觉重设计、响应式、测试体系、`tabs` 权限、图标工具链。
 - **不一致**：13 项（§4），其中 4.2（NFC 顺序）为代码刻意修正、4.10 为 PRD 内部矛盾、4.1 影响实际采集行为。
 - **README 迭代说明与代码不符**：6 项（§5），核心为「导入导出恢复」表述（5.1）与已删导入相关的残留记录（5.2–5.4）。

@@ -1,6 +1,6 @@
 # 数据模型与数据流 — 网页文字采集器
 
-> 依据：`docs/_facts.md` 与代码。无数据库/无后端；所有数据在浏览器端 `chrome.storage.local`。
+> 依据：`docs/_facts.md` 与代码（v0.8.0，2026-08-13）。无数据库/无后端；所有**业务数据**在浏览器端 `chrome.storage.local`；另有一份随扩展包分发的**只读配置文件** `config/nav.json`（v0.8.0，见 §1.4 / §3）。
 > 「接口」指代码层函数接口（本项目无网络 API）。
 
 ---
@@ -37,6 +37,20 @@
 | `schemaVersion` | number | `1`（`onInstalled` 初始化；常量 `SCHEMA_VERSION=1`） | SW 安装时 | 数据版本标记；导出 JSON 携带 |
 | `orphanScanV1` | number（epoch ms） | 无 | `adoptOrphanSnippets` 每次扫描后 | 孤儿扫描节流时间戳（24h） |
 
+### 1.4 只读配置：NavConfig — `config/nav.json`（v0.8.0 新增，非 storage）
+
+随扩展包分发的静态 JSON 文件，由 `manager/nav.js` 经 `fetch(chrome.runtime.getURL('config/nav.json'))` 只读加载，**不写入、不持久化到 `chrome.storage.local`**。
+
+| 字段 | 类型 | 必填 | 语义 / 校验（`normalizeNavConfig`） |
+|------|------|------|-------------------------------------|
+| `columns` | Array\<NavColumn\> | 是（或用顶层 `links` 兼容糖） | 分栏列表；非数组且无顶层 `links` → 整份配置视为无效（返回 `null`） |
+| `columns[].title` | string | 否 | 栏标题；trim；缺失或非字符串 → `''`（该栏不渲染标题） |
+| `columns[].links` | Array\<NavLink\> | 是 | 该栏链接；无有效链接的栏整体移除 |
+| `columns[].links[].name` | string | 是 | 显示名；trim；空串 → 该条目丢弃 |
+| `columns[].links[].url` | string | 是 | 目标地址；trim；`new URL()` 解析失败或协议非 `http:`/`https:` → 该条目丢弃（防 XSS） |
+
+兼容糖：顶层 `links` 数组等价于 `columns: [{ title: '', links }]`。全部栏为空 → `normalizeNavConfig` 返回 `null` → 导航入口整体隐藏。
+
 ## 2. 实体关系
 
 ```
@@ -56,6 +70,7 @@ snip_<uuid> (Snippet 实体)        collectEnabled / schemaVersion / orphanScanV
 |------|------|------|
 | 全部业务数据 | `chrome.storage.local` | 浏览器本地；`unlimitedStorage` 权限；**无 localStorage/IndexedDB/文件/外部服务**（grep 证实） |
 | 导出文件 | 用户下载目录（浏览器行为） | `downloadBlob` 触发 `<a download>`，扩展不持有 |
+| 导航配置 | `text-collector/config/nav.json`（仓库内，随扩展包分发） | v0.8.0；只读静态文件，用户手改后刷新管理页生效；**不进 storage、不随导出文件携带** |
 | 图标产物 | `text-collector/icons/*.png`（仓库内） | 开发期生成，随扩展打包 |
 | 测试数据 | 无持久化（内存断言） | vitest 纯函数测试 |
 
@@ -91,6 +106,10 @@ snip_<uuid> (Snippet 实体)        collectEnabled / schemaVersion / orphanScanV
 | `toast.js: dismiss(toast)` | Element | void | showToast 内部；action 点击 |
 | `modal.js: showConfirmModal(title, body, onConfirm)` | string, string, Function? | void | manager.js（清空）；render.js（删除确认） |
 | `modal.js: showEditModal(title, initialText, onSave)` | string, string, Function | void | render.js（编辑） |
+| `nav.js: normalizeNavConfig(raw)` | any（解析后的 JSON） | `{columns:[{title,links:[{name,url}]}]}` \| `null` | loadNavConfig；`tests/nav.test.js`（9 例） |
+| `nav.js: loadNavConfig()` | — | Promise\<规范化配置 \| null\> | initNav |
+| `nav.js: renderNavPanel(config)` | 规范化配置 | void（构建 `#nav-panel` DOM，全 textContent） | initNav |
+| `nav.js: initNav()` | — | Promise\<void\> | nav.js 自调用（模块底部，含 `.catch` 兜底） |
 | `export.js: handleExport(format)` | 'txt'\|'json' | Promise\<void\> | manager.js 导出菜单 |
 | `export.js: downloadBlob(blob, filename)` | Blob, string | void | handleExport 内部 |
 
@@ -106,7 +125,8 @@ snip_<uuid> (Snippet 实体)        collectEnabled / schemaVersion / orphanScanV
 
 ### 4.4 网络接口
 
-**无**。无 REST/gRPC/WebSocket/第三方 API（全库 grep 无 fetch/XHR/WebSocket/sendMessage）。
+**无外部网络接口**。无 REST/gRPC/WebSocket/第三方 API（全库 grep 无 XHR/WebSocket/sendMessage）。
+唯一的 `fetch` 调用位于 `manager/nav.js`（v0.8.0），读取扩展包内同源资源 `chrome-extension://<id>/config/nav.json`，不产生任何对外流量。
 
 ## 5. 数据流向（谁写入、谁读取）
 
@@ -119,6 +139,8 @@ snip_<uuid> (Snippet 实体)        collectEnabled / schemaVersion / orphanScanV
 | `collectEnabled` | setCollectEnabled（管理页/快捷键）、onInstalled | content.js（缓存）、manager.js、SW（badge）、getCollectEnabled | content.js、manager.js、SW（三方） |
 | `schemaVersion` | onInstalled | export.js（写入导出文件） | 无 |
 | `orphanScanV1` | adoptOrphanSnippets | adoptOrphanSnippets（节流判断） | 无 |
+
+> `config/nav.json` 不在上表内：它是随包分发的只读文件，写入方为**开发者/用户手工编辑文件**，读取方仅 `manager/nav.js`，无订阅机制（改动后刷新管理页生效）。
 
 ### 5.2 主数据流（采集 → 存储 → 展示）
 
@@ -169,6 +191,20 @@ manager.js init → adoptOrphanSnippets()
    → 缺 id 者批量写回（100/批）
    → 合并进 snippets_order 头部（按 capturedAt 降序，去重）
    → 写 orphanScanV1 = now；返回收领数
+```
+
+### 5.6 导航配置数据流（v0.8.0，只读、不落存储）
+
+```
+config/nav.json（扩展包内静态文件）
+   │ manager/nav.js: fetch(chrome.runtime.getURL(...))
+   ▼
+normalizeNavConfig（协议白名单 http/https、trim、丢弃空条目与空栏）
+   ├─ null（缺失/非法/无有效链接）→ #nav-root 加 .hidden，导航入口隐藏
+   └─ 规范化配置 → renderNavPanel → #nav-panel DOM（textContent 渲染）
+                     │ 用户点击 .nav-link
+                     ▼
+                  浏览器新标签页打开（target=_blank rel=noopener）
 ```
 
 ## 6. 一致性机制摘要
