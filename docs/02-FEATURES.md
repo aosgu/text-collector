@@ -1,7 +1,7 @@
 # 功能规格 — 网页文字采集器
 
-> 依据：`docs/_facts.md` 与代码。每个功能包含：用户故事、触发入口、交互流程、输入/输出、边界情况、关联接口/数据/组件、置信度。
-> 交互描述均对应到具体组件（DOM id/class）与文件。
+> 依据：`docs/_facts.md` 与代码（v0.8.0，2026-08-13）。每个功能包含：用户故事、触发入口、交互流程、输入/输出、边界情况、关联接口/数据/组件、置信度。
+> 交互描述均对应到具体组件（DOM id/class）与文件。共 **21 个功能**（功能 21 为 v0.8.0 新增的网站导航）。
 
 ---
 
@@ -260,6 +260,36 @@
 
 ## 功能 20：单元测试（开发期能力）
 
-- **说明**：`tests/` 用语法提取源码纯函数（`helpers/load-source.js` 的 `extractFunction`/`extractObjectLiteral`，不执行浏览器代码）在 Node 环境跑 vitest；`storage.test.js` 16 例（getUrlKey/getDomain/filterOrderRecords 等）、`content.test.js` 39 例（准入规则/截断等）。
+- **说明**：`tests/` 用语法提取源码纯函数（`helpers/load-source.js` 的 `extractFunction`/`extractObjectLiteral`，不执行浏览器代码）在 Node 环境跑 vitest；`storage.test.js` 16 例（getUrlKey/getDomain/filterOrderRecords 等）、`content.test.js` 39 例（准入规则/截断等）、`nav.test.js` 9 例（`normalizeNavConfig` 配置校验，v0.8.0 新增）——合计 64 例。
 - **关联**：`tests/*`、`vitest.config.js`（environment: node）、`package.json`（`npm test`）。
 - **置信度：高**。
+
+## 功能 21：网站导航（管理页快捷方式面板）
+
+> v0.8.0 新增。管理页被当作「新标签页」使用，本功能提供类似 Chrome 新标签页固定网站快捷方式的能力。
+
+- **用户故事**：作为把管理页当新标签页用的用户，我希望在页面头部一键跳转到常去的网站，且站点列表能自己配。
+- **触发入口**：管理页头部品牌名右侧的指南针图标 `#btn-nav`（hover / 点击 / 键盘）；容器 `#nav-root`，面板 `#nav-panel`。
+- **交互流程**：
+  1. 管理页加载 → `initNav()` → `loadNavConfig()`：`fetch(chrome.runtime.getURL('config/nav.json'))`；
+  2. `normalizeNavConfig(raw)` 校验规范化 → 无有效内容返回 `null` → `#nav-root` 加 `.hidden` 整体隐藏，流程结束；
+  3. 有效配置 → `renderNavPanel(config)` 按栏构建（全部 `textContent`，无 `innerHTML`）→ 移除 `.hidden` 显示图标；
+  4. hover `#nav-root` → `openNav()` 展开（`.nav.open` + `aria-expanded="true"`）；鼠标离开 → `scheduleNavClose()` 200ms 宽限后收起（宽限期内可移入面板）；
+  5. 点击图标切换开合（触摸设备无 hover）；点击导航区域外 / 焦点离开导航区域 → 收起；
+  6. 点击 `.nav-link` → 新标签页打开（`target="_blank" rel="noopener"`）并收起面板。
+- **输入**：扩展包内 `config/nav.json`；**输出**：面板 DOM + 新标签页跳转。**不读写 `chrome.storage.local`，无任何持久化状态**。
+- **配置 Schema**：
+  ```json
+  { "columns": [ { "title": "常用", "links": [ { "name": "GitHub", "url": "https://github.com" } ] } ] }
+  ```
+  兼容糖：顶层 `links` 数组视为单个无标题栏；每栏 `title` 可选。
+- **边界情况**：
+  - 文件缺失 / HTTP 非 200 / 非法 JSON / 无有效链接 → `console.warn` + 导航入口整体隐藏，**管理页其余功能不受影响**（`initNav().catch` 二次兜底）；
+  - 非 `http:` / `https:` 协议（`javascript:`、`data:`、`chrome:`、相对路径）→ 该链接被过滤（防 XSS）；
+  - `name` / `url` 空串或非字符串 → 该条目丢弃；栏内无有效链接 → 整栏移除；
+  - 栏数多、面板过宽 → `max-width: min(92vw, 760px)` 收窄后换行；窄屏（≤640px）改为顶部 `position: fixed` 全宽覆盖；
+  - 修改 `config/nav.json` 后刷新管理页即生效（unpacked 扩展无需重载扩展）。
+- **键盘可达**：图标上 Enter / Space / ↓ 展开并聚焦首个链接；已展开时 Enter / Space 收起；面板内 Esc 收起并归还焦点到图标；Tab 在链接间自然移动，焦点离开导航区域自动收起。
+- **样式要点**（`manager.css` `.nav` / `.nav-panel` / `.nav-col` / `.nav-link`）：面板 `position: absolute` 挂在 32px 宽的 `.nav` 上，必须显式 `width: max-content` 才能让各栏并排——否则 shrink-to-fit 会塌缩到 min-content，配合 `flex-wrap: wrap` 使各栏竖向堆叠（v0.8.0 修复）；窄屏分支用 `width: auto` 覆盖。
+- **关联**：`manager/nav.js`（normalizeNavConfig / loadNavConfig / renderNavPanel / initNav）、`config/nav.json`、`manager/manager.html`（`#nav-root`/`#btn-nav`/`#nav-panel`）、`manager/manager.css`、`tests/nav.test.js`（9 例）。
+- **置信度：高**（交互与校验规则代码直接可证；`normalizeNavConfig` 有单测覆盖）。

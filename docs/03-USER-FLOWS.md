@@ -1,6 +1,6 @@
 # 用户流程 — 网页文字采集器
 
-> 依据：`docs/_facts.md` 与代码。以下为关键用户流程（7 个），每个流程给出步骤与状态迁移。
+> 依据：`docs/_facts.md` 与代码（v0.8.0，2026-08-13）。以下为关键用户流程（8 个，流程 8 为 v0.8.0 新增），每个流程给出步骤与状态迁移。
 > 说明：代码中**不存在**显式的流程图/状态机文件（无 mermaid/dot/状态机库）；以下「状态迁移」均取自代码中可证明的状态变化：`addSnippet` / `toggleFavoriteSnippet` 的返回 action 分支、`clearAllSnippets` 的字段迁移、`chrome.storage.local` 键的变化。
 
 ---
@@ -164,6 +164,36 @@ saved: true→false（clearedFromHome=true）→ action:'deleted'（彻底删除
 **状态迁移**：无存储变化（只读流程）；导出范围随当前页签（`home`/`saved`）变化，已保存页签导出文件名带 `_saved_` 后缀。
 
 **涉及**：`manager/export.js`、`manager/manager.js`、`utils/storage.js`。
+
+---
+
+## 流程 8：通过网站导航跳转（v0.8.0 新增）
+
+**入口**：管理页头部指南针图标 `#btn-nav`（hover / 点击 / 键盘）。
+
+| 步骤 | 动作 | 状态迁移 / 数据变化 | 代码位置 |
+|------|------|---------------------|----------|
+| 1 | 管理页加载 | `initNav()` → `loadNavConfig()` 读包内 `config/nav.json` | `manager/nav.js` |
+| 2 | 配置规范化 | `normalizeNavConfig`：过滤非法条目 → 有效则 `renderNavPanel` 建面板并显示图标；无效 → `#nav-root` 加 `.hidden`，流程终止（管理页其余功能不受影响） | 同上 |
+| 3 | hover 导航区域 | `navOpen: false → true`；`.nav.open` + `aria-expanded="true"`，面板去 `.hidden` | `openNav` / `setNavOpen` |
+| 4a | 鼠标离开导航区域 | `scheduleNavClose()` 起 200ms 宽限计时；期间移回（含移入面板）→ 计时取消，保持展开 | `scheduleNavClose` / `openNav` |
+| 4b | 点击图标 | 展开 ⇄ 收起切换（触摸设备无 hover 时的入口） | `#btn-nav` click |
+| 4c | 键盘 Enter / Space / ↓ | 展开并聚焦首个链接；已展开时 Enter / Space 收起；Esc 收起并把焦点还给图标 | keydown 分支 |
+| 5 | 点击快捷方式 `.nav-link` | 浏览器新标签页打开目标站点（`target="_blank" rel="noopener"`）；面板收起 | `#nav-panel` click |
+| 6 | 点击导航区域外 / 焦点离开导航区域 | `navOpen: true → false` | document click / focusin |
+
+**状态迁移**（纯 UI 状态，`navOpen` 为模块级内存变量，**不落存储**）：
+
+```
+配置无效 → 图标隐藏（终态）
+配置有效 → 收起 ⇄ 展开
+             ├─ hover / 点击 / Enter·Space·↓ → 展开
+             └─ 离开 200ms 宽限 / 再次点击 / Esc / 点击区域外 / 焦点移出 → 收起
+```
+
+**边界**：`fetch` 失败或 JSON 非法 → `console.warn` + 图标隐藏；非 http/https 链接被过滤；`initNav()` 抛错时 `.catch` 兜底隐藏导航，绝不影响采集与列表功能。
+
+**涉及**：`manager/nav.js`、`config/nav.json`、`manager/manager.html`、`manager/manager.css`。
 
 ---
 

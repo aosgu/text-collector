@@ -1,7 +1,9 @@
 # 代码事实清单 — text-collector
 
-> 生成方式：对当前代码快照（commit `1c1f9ee`，2026-08-12）的源码逐文件扫描，仅记录代码中可证明存在的内容。
-> 修订记录：2026-08-12 — 根据用户确认，将「导入功能」状态由「待确认（无证据）」更正为「已删除」（见 §4.3）。
+> 生成方式：对当前代码快照（v0.8.0，2026-08-13）的源码逐文件扫描，仅记录代码中可证明存在的内容。
+> 修订记录：
+> - 2026-08-12 — 根据用户确认，将「导入功能」状态由「待确认（无证据）」更正为「已删除」（见 §4.3）。
+> - 2026-08-13（v0.8.0）— 新增网站导航模块（`manager/nav.js` + `config/nav.json`）相关事实：§2 模块表、§3.1 操作表、§5.1/5.3 接口、§6.2 内存状态、§8.5 配置文件；并记录导航面板分栏与 tooltip 的样式修复（§9）。
 > 扫描范围：`text-collector/` 全部源码、`manifest.json`、`package.json`、`vitest.config.js`、`tests/`、`design/`（图标生成工具）。
 > 排除范围：`docs/archive/`（按要求禁止参考）、`node_modules/`、`.git/`、二进制产物（PNG）。
 > 置信度：**高** = 代码直接证明；**中** = 代码 + 注释推断；**低** = 推测。无法判断处标注「待确认」。
@@ -245,8 +247,24 @@
 - Schema：`{ "columns": [ { "title": string（可选）, "links": [ { "name": string, "url": string } ] } ] }`；兼容糖：顶层 `links` 数组视为单个无标题栏。
 - 校验：仅放行 `http:`/`https:` 协议（`javascript:`/`data:`/`chrome:`/相对路径一律过滤）；name/url trim；空条目与无有效链接的栏移除；全部无效 → `#nav-root` 隐藏。
 - 修改文件后刷新管理页即生效（unpacked 扩展无需重载扩展）。
-- `package.json` scripts：`test`（`vitest run`）、`test:watch`；devDependencies 仅 `vitest ^4.1.10`。
+- 当前仓库内示例配置为 3 栏 9 链接（常用 4 / 开发 3 / 阅读 2）。
+
+### 8.6 包管理脚本
+
+- `package.json`：`version` 0.8.0；scripts `test`（`vitest run`）、`test:watch`；devDependencies 仅 `vitest ^4.1.10`。
 - `design/package.json` scripts：`icons`（`node make-icons.js`）、`preview`；依赖 `sharp ^0.35.3`（仅图标生成用，不在扩展运行时）。
+
+---
+
+## 9. 版本与本版变更（v0.8.0）
+
+- 版本号：`manifest.json` / `package.json` 均为 **0.8.0**（上一版 0.7.2）。
+- 新增文件：`manager/nav.js`、`config/nav.json`、`tests/nav.test.js`；`manager/manager.html` 新增 `#nav-root` / `#btn-nav` / `#nav-panel` 结构；`manager/manager.css` 新增 `.nav` / `.nav-panel` / `.nav-col` / `.nav-col-title` / `.nav-link` 规则与窄屏分支。
+- 导航相关硬编码常量：`NAV_CLOSE_GRACE_MS = 200`（nav.js，鼠标离开后收起宽限）；面板 `max-width: min(92vw, 760px)`、`max-height: min(64vh, 520px)`、栏 `min-width: 128px`（manager.css）。
+- 本版内的样式修复（代码事实）：
+  - `.nav-panel` 显式 `width: max-content`——绝对定位面板的包含块是 32px 宽的 `.nav`，不给宽度会 shrink-to-fit 塌缩到 min-content，配合 `flex-wrap: wrap` 导致第 2/3 栏堆到第一栏下方；窄屏 `@media (max-width: 640px)` 的 `position: fixed` 分支补 `width: auto` 覆盖。
+  - `#btn-nav` 不再设 `title` 属性（仅保留 `aria-label="网站导航"`），消除 hover 时的浏览器原生 tooltip。
+- 存储结构、采集链路、导出格式、manifest 权限**均无变化**。
 
 ---
 

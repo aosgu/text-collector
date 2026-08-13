@@ -2,7 +2,7 @@
 
 个人自用的 Chrome 扩展：在任意网页**选中文字即自动保存**，点击工具栏图标打开管理页，进行查看、复制、删除（可撤销）、收藏、编辑与导出。
 
-> 纯个人备忘 · 数据完全本地 · 零网络请求 · 不对外发布
+> 纯个人备忘 · 数据完全本地 · 零外部网络请求 · 不对外发布
 
 ## 特性
 
@@ -22,15 +22,16 @@
 |------|------|
 | [`docs/_facts.md`](../docs/_facts.md) | **当前事实源**：代码事实清单（页面/模块/操作/数据模型/接口/状态/权限/配置） |
 | [`docs/01-PRODUCT.md`](../docs/01-PRODUCT.md) | 产品文档：定义、目标用户、功能全景、非目标 |
-| [`docs/02-FEATURES.md`](../docs/02-FEATURES.md) | 功能规格：20 个功能，含交互流程、边界情况、置信度 |
-| [`docs/03-USER-FLOWS.md`](../docs/03-USER-FLOWS.md) | 用户流程：7 个关键流程的状态迁移 |
+| [`docs/02-FEATURES.md`](../docs/02-FEATURES.md) | 功能规格：21 个功能，含交互流程、边界情况、置信度 |
+| [`docs/03-USER-FLOWS.md`](../docs/03-USER-FLOWS.md) | 用户流程：8 个关键流程的状态迁移 |
 | [`docs/04-ARCHITECTURE.md`](../docs/04-ARCHITECTURE.md) | 技术架构：模块划分、依赖、部署运行 |
 | [`docs/05-DATA-MODEL.md`](../docs/05-DATA-MODEL.md) | 数据模型：实体字段、接口清单、数据流向 |
 | [`docs/06-DECISIONS.md`](../docs/06-DECISIONS.md) | 技术决策记录（含待确认问题清单） |
+| [`docs/CHANGELOG.md`](../docs/CHANGELOG.md) | **变更日志**：v0.8.0 起的版本变更（更早版本见 `docs/archive/legacy-notes.md`） |
 | [`docs/_diff-report.md`](../docs/_diff-report.md) | 旧 PRD / README 迭代说明 vs 当前代码的变更对照 |
 | [`docs/archive/`](../docs/archive/) | **历史文档，仅供追溯，不作为当前事实来源**（原始 PRD、旧 README 笔记） |
 
-> **迭代约定**：修改业务代码后请同步更新 `docs/_facts.md`；`docs/archive/` 禁止改动。
+> **迭代约定**：修改业务代码后请同步更新 `docs/_facts.md` 与 `docs/CHANGELOG.md`（涉及功能/流程/架构/数据/决策时一并更新 01–06），并同步 `manifest.json` 与 `package.json` 的版本号；`docs/archive/` 禁止改动。
 
 ## 安装
 
@@ -87,7 +88,7 @@
 ## 数据与隐私
 
 - 所有数据仅存于浏览器本地 `chrome.storage.local`（扩展申请了 `unlimitedStorage` 权限）
-- 扩展**不发起任何网络请求**：无远程同步、无统计上报、无第三方 API
+- 扩展**不发起任何外部网络请求**：无远程同步、无统计上报、无第三方 API（唯一的 `fetch` 读取扩展包内的 `config/nav.json`，走 `chrome-extension://` 同源协议）
 - 卸载扩展后数据丢失（无云备份）
 - 导出 JSON 仅作离线存档，**插件不提供导入恢复**
 
@@ -154,4 +155,4 @@ text-collector/
 
 [MIT](../LICENSE)
 
-版本历史见 [`docs/archive/legacy-notes.md`](../docs/archive/legacy-notes.md)（历史文档，仅供追溯）。
+当前版本 **v0.8.0**。变更日志见 [`docs/CHANGELOG.md`](../docs/CHANGELOG.md)；v0.7.2 及更早的版本历史见 [`docs/archive/legacy-notes.md`](../docs/archive/legacy-notes.md)（历史文档，仅供追溯）。

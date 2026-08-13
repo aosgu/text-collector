@@ -1,6 +1,6 @@
 # 技术架构 — 网页文字采集器
 
-> 依据：`docs/_facts.md` 与当前代码（commit `fb3eee8`）。禁止参考 `docs/archive/`。
+> 依据：`docs/_facts.md` 与当前代码（v0.8.0，2026-08-13）。禁止参考 `docs/archive/`。
 > 所有结论均可回溯到具体文件；推断处标注。
 
 ---
@@ -46,12 +46,15 @@
 │  │ 依赖 utils/storage.js    │   │ toast.js（通知）               │ │
 │  │ （manifest 先行注入）      │   │ modal.js（确认/编辑弹窗）       │ │
 │  └──────────────────────────┘   │ export.js（TXT/JSON 导出）     │ │
+│                                 │ nav.js（网站导航配置）         │ │
 │                                 │ 依赖 utils/storage.js          │ │
 │                                 └───────────────────────────────┘ │
 └───────────────────────────────────────────────────────────────────┘
 ```
 
 **要点**：三者（SW / Content Script / 管理页）**不互相直接调用**（无 `runtime.sendMessage`/`onMessage`），统一通过 `chrome.storage.local` 读写 + `chrome.storage.onChanged` 事件同步（高置信度，grep 证实无消息传递代码）。
+
+> v0.8.0 起管理页多一条**只读**边：`manager/nav.js` 用 `fetch(chrome.runtime.getURL('config/nav.json'))` 读取扩展包内配置渲染导航面板；该请求走 `chrome-extension://` 同源协议，**不是外部网络请求**，也不经过 storage。
 
 ```mermaid
 flowchart TB
@@ -61,12 +64,14 @@ flowchart TB
     MP[管理页<br/>manager/manager.html + manager/*.js]
     ST[(chrome.storage.local<br/>snip_* / snippets_order / collectEnabled ...)]
     UTL[utils/storage.js<br/>读写工具 + CONFIG]
+    NAVCFG[/config/nav.json<br/>包内导航配置 · 只读/]
   end
   SW <-->|读写/订阅| ST
   CS <-->|读写/订阅| ST
   MP <-->|读写/订阅| ST
   CS -.manifest 注入顺序依赖.-> UTL
   MP -.html script 顺序依赖.-> UTL
+  MP -->|fetch 同源 chrome-extension:// 只读| NAVCFG
 ```
 
 ## 3. 模块划分与职责
@@ -82,6 +87,7 @@ flowchart TB
 | 弹窗 | `text-collector/manager/modal.js` | `showConfirmModal` / `showEditModal`（自包含） | 管理页 |
 | 通知 | `text-collector/manager/toast.js` | 单实例 toast + SVG 图标常量（自包含） | 管理页 |
 | 导出 | `text-collector/manager/export.js` | TXT/JSON 生成与下载 | 管理页 |
+| 网站导航 | `text-collector/manager/nav.js` + `text-collector/config/nav.json` | 读取包内导航配置、校验规范化、渲染 hover 分栏面板（v0.8.0；不读写 storage，不依赖 manager.js 状态） | 管理页 |
 | 管理页样式 | `text-collector/manager/manager.css` | 主题变量、卡片/菜单/弹窗样式、响应式 | 管理页 |
 | 测试 | `text-collector/tests/*` + `tests/helpers/load-source.js` | 纯函数单元测试（语法提取） | Node（vitest） |
 | 图标工具 | `design/`（make-icons.js / icon-spec.js / preview.js / build-icon.js） | 参数化生成 `icons/icon16/48/128.png` | Node（开发期） |
@@ -98,8 +104,8 @@ utils/storage.js → content/content.js
 
 **管理页上下文**（`manager/manager.html` `<script>` 顺序）：
 ```
-utils/storage.js → toast.js → modal.js → render.js → export.js → manager.js
-（后者引用前者的全局函数/常量）
+utils/storage.js → toast.js → nav.js → modal.js → render.js → export.js → manager.js
+（后者引用前者的全局函数/常量；nav.js 为自初始化的独立模块，不被其他模块引用，也不引用它们）
 ```
 
 **Service Worker**：单文件，仅依赖 `chrome.*` API，不引用任何项目内模块（`service-worker.js` 头部注释：「采集逻辑在 content script 里直接读写 storage，本文件不做中转」）。
@@ -112,6 +118,7 @@ utils/storage.js → toast.js → modal.js → render.js → export.js → manag
 | `manager/manager.js` | `storage.js`: `adoptOrphanSnippets`、`getCollectEnabled`、`setCollectEnabled`、`getEarliestDate`、`clearAllSnippets`、`filterOrderRecords`、`getFilteredOrder`；`render.js`: `loadFirstPage`、`loadMore`、`prependNewCards`、`renderLoadError`；`toast.js`: `showToast`；`modal.js`: `showConfirmModal`；`export.js`: `handleExport` | 全局函数 |
 | `manager/render.js` | `storage.js`: `getSnippets`、`getStorageEstimate`、`deleteSnippet`、`toggleFavoriteSnippet`、`updateSnippetText`、`CONFIG`；`toast.js`: `showToast`、`ICON_*`；`modal.js`: `showConfirmModal`、`showEditModal` | 全局函数 |
 | `manager/export.js` | `storage.js`: `getAllSnippets`、`SCHEMA_VERSION`；`toast.js`: `showToast` | 全局函数 |
+| `manager/nav.js` | 无模块依赖（仅 DOM + `chrome.runtime.getURL` + `fetch` 包内配置） | — |
 | `manager/toast.js` | 无模块依赖（仅 DOM） | — |
 | `manager/modal.js` | 无模块依赖（仅 DOM） | — |
 | `tests/*.test.js` | 源码文件（`readSource` 读文本 + 语法提取） | Node fs / new Function |
@@ -146,7 +153,7 @@ utils/storage.js → toast.js → modal.js → render.js → export.js → manag
 ```
 cd text-collector
 npm install        # 安装 vitest（devDependency）
-npm test           # vitest run（Node 环境，55 用例：storage 16 + content 39）
+npm test           # vitest run（Node 环境，64 用例：storage 16 + content 39 + nav 9）
 npm run test:watch # 监听模式
 ```
 
