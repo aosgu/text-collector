@@ -31,12 +31,13 @@
 | 采集（内容脚本） | `content/content.js` | `processSelection`（准入规则→写库→toast）、`meetsLengthThreshold`、`isPureSymbol`、`isPureNumber`、`isPureURL`、`getActiveElement`、`isEditableElement`、`isSelectionInEditable`、`truncateText`、`detectDarkSurrounding`、`showToast`、`removeToastHost`；监听 `selectionchange`（500ms 防抖）与 `chrome.storage.onChanged` | 由页面事件驱动；`addSnippet` 来自 storage.js |
 | 内容脚本样式 | `content/content.css` | 钉死 toast 宿主 `#text-collector-toast-host` 的几何/层级/伪元素 | 由 manifest 注入所有页面 |
 | 管理页入口/编排 | `manager/manager.js` | `init`（adoptOrphanSnippets→renderToggle→loadFirstPage→setupListeners）、开关渲染/切换、清空确认、页签切换、导出菜单、storage 实时订阅（新记录 prepend + 提示条）、`listBridge` 状态通道 | manager.html `<script>` 引入 |
+| 网站导航 | `manager/nav.js` + `config/nav.json` | `normalizeNavConfig`（纯函数：配置校验/规范化，单测覆盖）、`loadNavConfig`（`fetch(chrome.runtime.getURL('config/nav.json'))` 读取包内配置）、`renderNavPanel`、`initNav`（hover 展开/200ms 宽限收起、点击切换、Esc/Enter/Space/ArrowDown 键盘可达、新标签页打开链接；无有效配置时隐藏 `#nav-root`） | manager.html `<script>` 引入（先于 manager.js），自初始化，不读写 manager.js 全局状态 |
 | 列表渲染 | `manager/render.js` | `loadFirstPage`、`loadMore`、`updateRecordInfo`、`applyTruncationCheck`、`createCard`（收藏/复制/展开/删除/编辑按钮）、`deleteRecord`（含撤销）、`performDeleteRecord`、`copyToClipboard`、`prependNewCards`、`renderLoadError` | manager.js（init/onChanged/handleClearAll）；卡片事件自触发 |
 | 确认/编辑弹窗 | `manager/modal.js` | `showConfirmModal`（Esc/Tab 陷阱/遮罩关闭）、`showEditModal`（textarea、Ctrl+Enter 保存） | manager.js（清空确认）、render.js（删除确认、编辑笔记） |
 | 管理页 Toast | `manager/toast.js` | `showToast`（单实例，kind: success/info/danger，可带操作按钮）、`dismiss`；`ICON_BOOKMARK_OUTLINE`/`ICON_BOOKMARK_SOLID`/`ICON_TRASH`/`ICON_CHECK`/`ICON_INFO`/`ICON_ALERT` 常量 | render.js、export.js、manager.js |
 | 导出 | `manager/export.js` | `handleExport(format)`（TXT 带 UTF-8 BOM / JSON 含 schemaVersion）、`downloadBlob` | manager.js（导出菜单项点击） |
 | 管理页样式 | `manager/manager.css` | 全部视觉样式 + `:root` CSS 变量（主题色板） | manager.html `<link>` 引入 |
-| 单元测试 | `tests/storage.test.js`、`tests/content.test.js`、`tests/helpers/load-source.js` | 用语法提取纯函数（`extractFunction`/`extractObjectLiteral`）在 Node 环境运行 vitest；16 + 39 个用例 | `npm test`（vitest，见 `package.json`/`vitest.config.js`，environment: node） |
+| 单元测试 | `tests/storage.test.js`、`tests/content.test.js`、`tests/nav.test.js`、`tests/helpers/load-source.js` | 用语法提取纯函数（`extractFunction`/`extractObjectLiteral`）在 Node 环境运行 vitest；16 + 39 + 9 = 64 个用例 | `npm test`（vitest，见 `package.json`/`vitest.config.js`，environment: node） |
 | 图标生成工具（开发期，非运行时） | `design/`（`make-icons.js`、`icon-spec.js`、`preview.js`、`build-icon.js` 等） | 参数化生成 `icons/icon16/48/128.png`（依赖 sharp） | `design/package.json` 脚本 `npm run icons` / `npm run preview`；产物被 manifest 引用，工具本身不进扩展包 |
 
 ---
@@ -53,6 +54,10 @@
 | 点击「清空全部」`#btn-clear` | `showConfirmModal` 二次确认（含最早记录日期提示）→ `clearAllSnippets()`：未收藏记录彻底删除，已收藏记录保留并标记 `clearedFromHome=true` | toast「已清空」（success） | **无显式失败反馈**（`handleClearAll` 无 catch 分支；出错将冒泡为未处理 rejection） | manager.js |
 | 采集开关 `#collect-toggle`（role=switch，点击或 Enter/Space） | `handleToggle` → `setCollectEnabled(!enabled)` → 更新 UI（aria-checked/ON/OFF） | 开关视觉切换；badge 同步（SW 监听 storage.onChanged） | **无显式失败反馈**（无 catch） | manager.js；service-worker.js |
 | 页签「首页」/「已保存」`#tab-home`/`#tab-saved` | 切换 `currentTab`，切到「已保存」时隐藏清空按钮，重载首屏列表 | 列表/计数/空态文案切换 | 加载失败走 loadMore 的失败分支 | manager.js |
+| hover 导航图标 `#btn-nav` | 展开网站快捷方式分栏面板（`config/nav.json` 驱动）；鼠标离开导航区域 200ms 宽限后收起 | 面板展开（`aria-expanded=true`、`.nav.open`） | 配置缺失/解析失败/无有效链接 → `#nav-root` 整体隐藏（console.warn） | nav.js |
+| 点击导航图标（触摸）/ 点击区域外 / 焦点离开导航区域 | 切换或收起面板 | 面板收起 | — | nav.js |
+| 点击快捷方式 `.nav-link` | 新标签页打开网站（`target="_blank" rel="noopener"`），面板收起 | 新标签页 | — | nav.js |
+| 键盘：图标上 Enter/Space/↓ 展开并聚焦首链；面板内 Esc 收起并归还焦点 | 键盘可达导航面板 | — | — | nav.js |
 | 点击卡片文本区 `.card-text` | `copyToClipboard(record.text)`（`navigator.clipboard.writeText`，失败 fallback `execCommand('copy')`） | toast「已复制」（success）+ 卡片 `card-copied` 动画 500ms | —（clipboard API 失败 fallback 无反馈） | render.js |
 | 卡片键盘 Enter/Space（焦点在卡片本身） | 同上复制 | 同上 | — | render.js |
 | 点击收藏按钮 `.card-favorite`（书签图标） | `toggleFavoriteSnippet(id)` 切换 `saved`；若在「已保存」页签取消收藏，卡片淡出并移除，计数同步 | toast「已添加到"已保存"」（success）/「已取消收藏」（info） | —（`toggleFavoriteSnippet` 返回 null 时静默置为未收藏，无提示） | render.js |
@@ -124,7 +129,7 @@
 ## 5. 接口清单
 
 ### 5.1 后端 / 第三方 API
-**无**。全库 grep 无 `fetch(`、`XMLHttpRequest`、`WebSocket`、`importScripts`、`chrome.runtime.sendMessage`/`onMessage`。扩展不发起任何网络请求（高置信度）。
+**无**。全库 grep 无 `XMLHttpRequest`、`WebSocket`、`importScripts`、`chrome.runtime.sendMessage`/`onMessage`；唯一的 `fetch(` 调用位于 `manager/nav.js`，仅读取扩展包内同源资源 `config/nav.json`（`chrome.runtime.getURL`，chrome-extension:// 协议），**不发起任何外部网络请求**（高置信度）。
 
 ### 5.2 浏览器扩展 API（chrome.*）
 
@@ -150,6 +155,7 @@
 | `crypto.randomUUID` | 生成记录 id | storage.js |
 | `HTMLElement.attachShadow({mode:'closed'})` | toast 隔离 | content.js |
 | `window.matchMedia` / `getComputedStyle` | 深色环境探测 | content.js |
+| `fetch(chrome.runtime.getURL(...))` | 读取包内导航配置 `config/nav.json`（同源资源，非外部网络） | nav.js |
 
 ---
 
@@ -176,6 +182,7 @@
 | toast 引用与定时器 | `toastHost`、`toastHideTimer`、`toastRemoveTimer` | content.js | 单实例 |
 | 分页/计数/页签状态 | `currentOffset`、`totalCount`、`isLoading`、`newRecordsCount`、`newRecordTimer`、`ignoreAllOrderChanges`、`currentTab` | manager.js（经 `listBridge` 只读 getter/只写命名函数暴露给 render.js） | 管理页生命周期 |
 | 管理页 toast 当前实例 | `currentToastEl` | toast.js | 单实例 |
+| 导航面板开合状态/收起宽限计时器 | `navOpen`、`navCloseTimer` | nav.js | 管理页生命周期 |
 
 ### 6.3 状态同步机制
 - `chrome.storage.onChanged`：SW（badge）、content（开关缓存）、manager（开关 UI + 新记录实时 prepend，3s 后隐藏「新增了 N 条记录」提示条）。
@@ -231,6 +238,13 @@
 
 - **无环境变量**：全库 grep 无 `process.env`（高置信度）。
 - 无构建步骤：扩展直接以源码加载（manifest 直接引用 js/css）。
+
+### 8.5 导航配置文件（唯一用户可配置文件，v0.8.0 新增）
+
+- 路径：`text-collector/config/nav.json`；管理页初始化时 `nav.js loadNavConfig` 经 `fetch(chrome.runtime.getURL(...))` 读取，`normalizeNavConfig` 校验规范化。
+- Schema：`{ "columns": [ { "title": string（可选）, "links": [ { "name": string, "url": string } ] } ] }`；兼容糖：顶层 `links` 数组视为单个无标题栏。
+- 校验：仅放行 `http:`/`https:` 协议（`javascript:`/`data:`/`chrome:`/相对路径一律过滤）；name/url trim；空条目与无有效链接的栏移除；全部无效 → `#nav-root` 隐藏。
+- 修改文件后刷新管理页即生效（unpacked 扩展无需重载扩展）。
 - `package.json` scripts：`test`（`vitest run`）、`test:watch`；devDependencies 仅 `vitest ^4.1.10`。
 - `design/package.json` scripts：`icons`（`node make-icons.js`）、`preview`；依赖 `sharp ^0.35.3`（仅图标生成用，不在扩展运行时）。
 
@@ -238,7 +252,7 @@
 
 ## 附：明确的「无」
 
-- 无后端、无网络请求、无第三方 API。
+- 无后端、无**外部**网络请求、无第三方 API（唯一 `fetch` 读取包内配置文件 `config/nav.json`）。
 - 无登录/账号/角色/权限体系。
 - 导入功能已删除（用户确认；当前代码无任何导入实现，grep 验证）。
 - 无 localStorage / sessionStorage / cookie 使用。
