@@ -300,8 +300,69 @@ function setupListeners() {
   $btnLoadMore.addEventListener('click', () => loadMore(listBridge));
 }
 
-// ── 启动：任何一步抛错都展示错误态，避免白屏 ──
+// ── 待办 Tab 桥接（v1.0.0） ──
+// 把管理页的 showToast / showConfirmModal / showEditModal 暴露给 todo.js 使用，
+// 避免 todo.js 直接依赖 manager.js 的内部变量 / 重复实现。
+window.__managerBridge = {
+  showToast: showToast,
+  showConfirm: showConfirmModal,
+  showEdit: showEditModal,
+};
+
+// ── 采集 tab 下的 toolbar 额外按钮（导出 / 清空）：仅采集 tab 可见 ──
+const $collectExtras = document.getElementById('collect-toolbar-extras');
+function setCollectExtrasVisible(visible) {
+  if (!$collectExtras) return;
+  $collectExtras.classList.toggle('hidden', !visible);
+}
+
+// ── 顶 Tab 路由：#collect（默认）/ #todo ──
+function applyRouteFromHash() {
+  const h = (location.hash || '').replace(/^#/, '');
+  const isTodo = h.indexOf('todo') === 0;
+  const tabCollect = document.getElementById('tab-collect');
+  const tabTodo = document.getElementById('tab-todo');
+  const viewCollect = document.getElementById('view-collect');
+  const viewTodo = document.getElementById('view-todo');
+  const collectToggle = document.getElementById('collect-toggle');
+
+  if (tabCollect) {
+    tabCollect.classList.toggle('active', !isTodo);
+    tabCollect.setAttribute('aria-selected', isTodo ? 'false' : 'true');
+    tabCollect.tabIndex = isTodo ? -1 : 0;
+  }
+  if (tabTodo) {
+    tabTodo.classList.toggle('active', isTodo);
+    tabTodo.setAttribute('aria-selected', isTodo ? 'true' : 'false');
+    tabTodo.tabIndex = isTodo ? 0 : -1;
+  }
+  if (viewCollect) viewCollect.classList.toggle('hidden', isTodo);
+  if (viewTodo) viewTodo.classList.toggle('hidden', !isTodo);
+  if (collectToggle) {
+    // 待办 tab 下置灰，避免误操作影响采集状态
+    collectToggle.classList.toggle('is-disabled', isTodo);
+    collectToggle.setAttribute('aria-disabled', isTodo ? 'true' : 'false');
+  }
+  setCollectExtrasVisible(!isTodo);
+}
+
+window.addEventListener('hashchange', applyRouteFromHash);
+
+// 启动：任何一步抛错都展示错误态，避免白屏
 init().catch(err => {
   console.error('[text-collector] init failed:', err);
   renderLoadError();
+}).then(() => {
+  // 默认 hash：#collect（保持历史行为：点击扩展图标进采集）
+  if (!location.hash) {
+    location.hash = '#collect';
+  } else {
+    applyRouteFromHash();
+  }
+  // 启动待办模块
+  if (window.TodoApp && typeof window.TodoApp.init === 'function') {
+    window.TodoApp.init().catch(err => {
+      console.error('[text-collector] todo init failed:', err);
+    });
+  }
 });
