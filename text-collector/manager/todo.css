@@ -102,32 +102,6 @@
   background: #fff;
   color: var(--blue);
 }
-.todo-list-item-delete {
-  width: 22px;
-  height: 22px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  border: none;
-  color: var(--text-dim);
-  border-radius: var(--radius-xs);
-  cursor: pointer;
-  opacity: 0;
-  transition: opacity .12s, background .12s, color .12s;
-  flex-shrink: 0;
-}
-.todo-list-item:hover .todo-list-item-delete { opacity: 1; }
-.todo-list-item-delete:hover {
-  background: var(--danger-soft);
-  color: var(--danger);
-}
-.todo-list-item-delete svg { width: 13px; height: 13px; }
-.todo-list-item-delete:focus-visible {
-  opacity: 1;
-  outline: 2px solid var(--blue);
-  outline-offset: 1px;
-}
 
 .todo-sidebar-divider {
   height: 1px;

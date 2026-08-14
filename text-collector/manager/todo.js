@@ -124,17 +124,8 @@
       count.textContent = String(uncompleted);
       li.appendChild(count);
 
-      // 删除按钮（hover 显示）
-      const del = document.createElement('button');
-      del.className = 'todo-list-item-delete';
-      del.type = 'button';
-      del.setAttribute('aria-label', '删除清单 ' + list.name);
-      del.dataset.role = 'list-delete';
-      del.innerHTML =
-        '<svg viewBox="0 0 16 16" fill="none" aria-hidden="true">' +
-        '<path d="M3 4h10M6.5 4V2.5h3V4M5 6.5v5m6-5v5M4 4l.6 8.5a1 1 0 001 .9h4.8a1 1 0 001-.9L12 4"' +
-        ' stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-      li.appendChild(del);
+      // 注：删除入口已从侧边栏移除，移到清单工作台顶部的「删除清单」按钮
+      // （设计决定，避免侧边栏 hover 删除按钮的误触）。
 
       container.appendChild(li);
     });
@@ -1029,13 +1020,6 @@
         const item = e.target.closest('.todo-list-item');
         if (!item) return;
         const listId = item.dataset.listId;
-        // 删除按钮优先
-        if (e.target.closest('[data-role="list-delete"]')) {
-          e.stopPropagation();
-          const lst = state.lists.find(l => l.id === listId);
-          if (lst) onDeleteList(lst);
-          return;
-        }
         // 双击重命名
         if (e.detail >= 2 && e.target.closest('[data-role="list-name"]')) {
           e.preventDefault();
