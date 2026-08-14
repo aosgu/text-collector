@@ -1012,36 +1012,11 @@
     // 首启惰性创建「今日待办」
     try { await window.TodoStorage.getOrCreateTodayList(); } catch (_) {}
 
-    // 绑定顶 Tab 按钮（在 manager.js 里以 .brand-tab / #brand-tabbar 形式存在）
-    const tCollect = $('tab-collect');
-    const tTodo = $('tab-todo');
-    if (tCollect) tCollect.addEventListener('click', () => {
-      location.hash = '#collect';
-    });
-    if (tTodo) tTodo.addEventListener('click', () => {
-      location.hash = '#todo';
-    });
-
-    // 键盘：在顶 Tab 上左右切换
-    const tabbar = $('brand-tabbar');
-    if (tabbar) {
-      tabbar.addEventListener('keydown', (e) => {
-        if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
-          e.preventDefault();
-          if (e.key === 'ArrowRight') {
-            if (tTodo) {
-              tTodo.focus();
-              location.hash = '#todo';
-            }
-          } else {
-            if (tCollect) {
-              tCollect.focus();
-              location.hash = '#collect';
-            }
-          }
-        }
-      });
-    }
+    // 顶视图切换入口由 manager.html 自身处理：
+    //   - 「采集」是 brand-name 纯文字（与原 v0.8.1 形态一致）
+    //   - 「待办」是 <a href="#todo">，点击触发 hashchange → applyRouteFromHash
+    //   - 「采集」入口（回到采集）由 SW 重新触发或浏览器后退；按用户决定不做
+    //     额外的"采集"文本可点（避免在 brand 区出现意料之外的 click 处理）。
 
     // 侧边栏：新建清单
     const newBtn = $('todo-new-list-btn');

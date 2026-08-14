@@ -320,34 +320,11 @@ function setCollectExtrasVisible(visible) {
 function applyRouteFromHash() {
   const h = (location.hash || '').replace(/^#/, '');
   const isTodo = h.indexOf('todo') === 0;
-  const tabCollect = document.getElementById('tab-collect');
-  const tabTodo = document.getElementById('tab-todo');
   const viewCollect = document.getElementById('view-collect');
   const viewTodo = document.getElementById('view-todo');
   const collectToggle = document.getElementById('collect-toggle');
   const toolbarCount = document.getElementById('toolbar-count');
 
-  if (tabCollect) {
-    tabCollect.classList.toggle('active', !isTodo);
-    tabCollect.setAttribute('aria-selected', isTodo ? 'false' : 'true');
-    tabCollect.tabIndex = isTodo ? -1 : 0;
-  }
-  if (tabTodo) {
-    tabTodo.classList.toggle('active', isTodo);
-    tabTodo.setAttribute('aria-selected', isTodo ? 'true' : 'false');
-    tabTodo.tabIndex = isTodo ? 0 : -1;
-  }
-  // 入口箭头：采集 tab 时在「待办」前加 >；待办 tab 时在「采集」前加 <
-  // （激活项不带箭头，激活项文本本身已表明当前位置）
-  if (tabCollect && tabTodo) {
-    if (isTodo) {
-      tabCollect.setAttribute('data-arrow', '<');
-      tabTodo.removeAttribute('data-arrow');
-    } else {
-      tabCollect.removeAttribute('data-arrow');
-      tabTodo.setAttribute('data-arrow', '>');
-    }
-  }
   if (viewCollect) viewCollect.classList.toggle('hidden', isTodo);
   if (viewTodo) viewTodo.classList.toggle('hidden', !isTodo);
   if (collectToggle) {

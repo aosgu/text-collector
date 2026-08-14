@@ -109,53 +109,51 @@ body {
   letter-spacing: 0;
 }
 
-/* 主视图入口：采集 / 待办
-   - 沿用原 brand-name 的衬线 18px 600（与「采集」原本字号一致）
-   - 激活项无前缀箭头；非激活项前加 > 或 < 提示可跳方向
-   - 例：采集 tab → `采集  >  待办`；待办 tab → `采集  <  待办` */
-.brand-tabbar {
-  display: inline-flex;
+/* 品牌：图标 + 「采集 / 待办」
+   - 两者字号、字体、字重一致（serif 18px 600，色 var(--text)）
+   - 斜杠分隔符降低视觉权重
+   - 「待办」是可点击的文字入口：点击切到 #todo 视图
+   - 整组无激活态、无箭头——只是入口文字 */
+.brand {
+  display: flex;
   align-items: center;
-  gap: 0;
+  gap: 10px;
   margin-right: 12px;
 }
-.brand-tab {
-  background: transparent;
-  border: none;
-  padding: 4px 2px;
+.brand-mark {
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+}
+.brand-name {
   font-family: var(--serif);
   font-size: 18px;
   font-weight: 600;
   letter-spacing: -0.01em;
+  color: var(--text);
   line-height: 1;
-  color: var(--text-muted);  /* 非激活态：灰色（沿用原 brand-sub 灰） */
+}
+.brand-sep {
+  color: var(--text-dim);
+  font-weight: 400;
+  margin: 0 3px;
+}
+/* 「待办」入口：与「采集」同字体同大小同字重，仅颜色略弱以区分主次 */
+.brand-sub {
+  font-family: var(--serif);
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-decoration: none;
   cursor: pointer;
   transition: color .15s ease;
-  position: relative;
-  user-select: none;
+  letter-spacing: -0.01em;
 }
-.brand-tab + .brand-tab { margin-left: 18px; }
-.brand-tab.active {
-  color: var(--text);  /* 激活态：深色（沿用原 brand-name 主色） */
-  cursor: default;
-}
-.brand-tab.active::before,
-.brand-tab.active::after { content: none; }
-/* 非激活项前的箭头（> 或 <）由 JS 写入 data-arrow 属性控制 */
-.brand-tab[data-arrow]::before {
-  content: attr(data-arrow);
-  display: inline-block;
-  margin-right: 6px;
-  color: var(--text-dim);
-  font-family: var(--sans);
-  font-weight: 400;
-  font-size: 14px;
-  opacity: 0.7;
-}
-.brand-tab:hover:not(.active) {
+.brand-sub:hover {
   color: var(--text);
+  text-decoration: none;
 }
-.brand-tab:focus-visible {
+.brand-sub:focus-visible {
   outline: 2px solid var(--blue);
   outline-offset: 3px;
   border-radius: 3px;
@@ -848,7 +846,8 @@ body {
   .toolbar-left, .toolbar-right {
     justify-content: center;
   }
-  .brand-tabbar { margin-right: 0; }
+  .brand { margin-right: 4px; }
+  .brand-sub { font-size: 15px; }  /* 窄屏稍小，避免溢出 */
   .toolbar-count { display: none; }
   /* 窄屏：面板改为顶部全宽覆盖，栏目换行平铺 */
   .nav-panel {
