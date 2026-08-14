@@ -7,46 +7,6 @@
 /* 收集隐藏辅助类（页面内复用 manager.css 的 .hidden） */
 .hidden { display: none !important; }
 
-/* ── 顶 Tab 容器（放在 manager.html 的 .toolbar-left 里，跟 brand / nav / 导出 同一行） ── */
-.todo-tabbar {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  margin-left: 4px;
-  padding: 3px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-}
-.todo-tab {
-  background: transparent;
-  border: none;
-  padding: 5px 14px;
-  font-family: var(--sans);
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text-muted);
-  border-radius: calc(var(--radius-sm) - 2px);
-  cursor: pointer;
-  transition: color .15s ease, background .15s ease, box-shadow .15s ease;
-}
-.todo-tab:hover { color: var(--text); }
-.todo-tab.active {
-  background: #fff;
-  color: var(--blue);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
-}
-.todo-tab:focus-visible {
-  outline: 2px solid var(--blue);
-  outline-offset: 1px;
-}
-.todo-tab[aria-disabled="true"] {
-  color: var(--text-dim);
-  cursor: not-allowed;
-  background: transparent;
-  box-shadow: none;
-}
-
 /* ── 采集开关：在 todo tab 下置灰 ── */
 .toggle.is-disabled {
   opacity: 0.5;
@@ -693,7 +653,6 @@
   .todo-list-container { max-height: 180px; }
   .todo-content { padding: 20px 18px 48px; }
   .todo-view-title { font-size: 22px; }
-  .todo-tabbar { margin-left: 0; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {

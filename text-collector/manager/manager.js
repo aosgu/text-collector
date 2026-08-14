@@ -325,6 +325,7 @@ function applyRouteFromHash() {
   const viewCollect = document.getElementById('view-collect');
   const viewTodo = document.getElementById('view-todo');
   const collectToggle = document.getElementById('collect-toggle');
+  const toolbarCount = document.getElementById('toolbar-count');
 
   if (tabCollect) {
     tabCollect.classList.toggle('active', !isTodo);
@@ -336,6 +337,17 @@ function applyRouteFromHash() {
     tabTodo.setAttribute('aria-selected', isTodo ? 'true' : 'false');
     tabTodo.tabIndex = isTodo ? 0 : -1;
   }
+  // 入口箭头：采集 tab 时在「待办」前加 >；待办 tab 时在「采集」前加 <
+  // （激活项不带箭头，激活项文本本身已表明当前位置）
+  if (tabCollect && tabTodo) {
+    if (isTodo) {
+      tabCollect.setAttribute('data-arrow', '<');
+      tabTodo.removeAttribute('data-arrow');
+    } else {
+      tabCollect.removeAttribute('data-arrow');
+      tabTodo.setAttribute('data-arrow', '>');
+    }
+  }
   if (viewCollect) viewCollect.classList.toggle('hidden', isTodo);
   if (viewTodo) viewTodo.classList.toggle('hidden', !isTodo);
   if (collectToggle) {
@@ -343,6 +355,8 @@ function applyRouteFromHash() {
     collectToggle.classList.toggle('is-disabled', isTodo);
     collectToggle.setAttribute('aria-disabled', isTodo ? 'true' : 'false');
   }
+  // 采集数据条数仅在采集 tab 下展示；待办 tab 下的总览在侧边栏的徽标
+  if (toolbarCount) toolbarCount.classList.toggle('hidden', isTodo);
   setCollectExtrasVisible(!isTodo);
 }
 
@@ -353,12 +367,9 @@ init().catch(err => {
   console.error('[text-collector] init failed:', err);
   renderLoadError();
 }).then(() => {
-  // 默认 hash：#collect（保持历史行为：点击扩展图标进采集）
-  if (!location.hash) {
-    location.hash = '#collect';
-  } else {
-    applyRouteFromHash();
-  }
+  // 默认进采集 tab（URL hash 不强制写入，保留 history 干净；
+  // applyRouteFromHash 自带默认逻辑：hash 为空视为 #collect）
+  applyRouteFromHash();
   // 启动待办模块
   if (window.TodoApp && typeof window.TodoApp.init === 'function') {
     window.TodoApp.init().catch(err => {

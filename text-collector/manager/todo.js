@@ -966,10 +966,8 @@
     if (!state.isReady) return;
     const h = location.hash.replace(/^#/, '');
     if (h.indexOf('todo') !== 0) {
-      // 切回采集
-      setActiveTab('collect');
-      showView('collect');
-      enableCollectToggle(true);
+      // 切回采集 tab：manager.js 的 applyRouteFromHash 会处理 Tab/视图/采集开关置灰；
+      // todo.js 不再重复设置，避免双重 toggle 抖动。
       return;
     }
     // #todo / #todo/all / #todo/done / #todo/templates / #todo/list/<id>
@@ -998,36 +996,6 @@
       renderSidebar();
       renderContent();
     }
-    setActiveTab('todo');
-    showView('todo');
-    enableCollectToggle(false);
-  }
-
-  function setActiveTab(which) {
-    const tCollect = $('tab-collect');
-    const tTodo = $('tab-todo');
-    if (tCollect) {
-      tCollect.classList.toggle('active', which === 'collect');
-      tCollect.setAttribute('aria-selected', which === 'collect' ? 'true' : 'false');
-    }
-    if (tTodo) {
-      tTodo.classList.toggle('active', which === 'todo');
-      tTodo.setAttribute('aria-selected', which === 'todo' ? 'true' : 'false');
-    }
-  }
-
-  function showView(which) {
-    const v1 = $('view-collect');
-    const v2 = $('view-todo');
-    if (v1) v1.classList.toggle('hidden', which !== 'collect');
-    if (v2) v2.classList.toggle('hidden', which !== 'todo');
-  }
-
-  function enableCollectToggle(enabled) {
-    const toggle = $('collect-toggle');
-    if (!toggle) return;
-    toggle.classList.toggle('is-disabled', !enabled);
-    toggle.setAttribute('aria-disabled', enabled ? 'false' : 'true');
   }
 
   // ── 数据加载 ──
@@ -1044,7 +1012,7 @@
     // 首启惰性创建「今日待办」
     try { await window.TodoStorage.getOrCreateTodayList(); } catch (_) {}
 
-    // 绑定顶 Tab 按钮
+    // 绑定顶 Tab 按钮（在 manager.js 里以 .brand-tab / #brand-tabbar 形式存在）
     const tCollect = $('tab-collect');
     const tTodo = $('tab-todo');
     if (tCollect) tCollect.addEventListener('click', () => {
@@ -1055,17 +1023,21 @@
     });
 
     // 键盘：在顶 Tab 上左右切换
-    const tabbar = $('todo-tabbar');
+    const tabbar = $('brand-tabbar');
     if (tabbar) {
       tabbar.addEventListener('keydown', (e) => {
         if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
           e.preventDefault();
           if (e.key === 'ArrowRight') {
-            tTodo && tTodo.focus();
-            location.hash = '#todo';
+            if (tTodo) {
+              tTodo.focus();
+              location.hash = '#todo';
+            }
           } else {
-            tCollect && tCollect.focus();
-            location.hash = '#collect';
+            if (tCollect) {
+              tCollect.focus();
+              location.hash = '#collect';
+            }
           }
         }
       });

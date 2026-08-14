@@ -13,24 +13,16 @@
   <!-- 顶部工具栏 -->
   <header class="toolbar">
     <div class="toolbar-left">
-      <div class="brand">
-        <svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true">
-          <rect x="0" y="0" width="24" height="24" rx="5.2" fill="#2f6fed"/>
-          <g fill="#ffffff">
-            <path transform="translate(2.25 7.31) scale(0.0862)" d="M 40 6 L 74 6 L 50 94 L 0 94 Z"/>
-            <path transform="translate(13.13 7.31) scale(0.0862)" d="M 40 6 L 74 6 L 50 94 L 0 94 Z"/>
-          </g>
-        </svg>
-        <span class="brand-name">采集器<span class="brand-sep">/</span><span class="brand-sub">manager</span></span>
-        <span id="toolbar-count" class="toolbar-count" aria-live="polite"></span>
-      </div>
-      <!-- 顶 Tab：采集 / 待办 -->
-      <div class="todo-tabbar" id="todo-tabbar" role="tablist" aria-label="主视图切换">
-        <button id="tab-collect" class="todo-tab active" role="tab"
+      <!-- 主视图入口：采集 / 待办。两个 Tab 字号同大（沿用原 brand-name serif 18px）；
+           激活项无前缀箭头，非激活项前加 > 或 < 暗示可跳方向。
+           例：采集 tab 时 `采集  >  待办`；待办 tab 时 `采集  <  待办`。 -->
+      <div class="brand-tabbar" id="brand-tabbar" role="tablist" aria-label="主视图切换">
+        <button id="tab-collect" class="brand-tab" role="tab"
                 aria-selected="true" aria-controls="view-collect" tabindex="0">采集</button>
-        <button id="tab-todo" class="todo-tab" role="tab"
+        <button id="tab-todo" class="brand-tab" role="tab"
                 aria-selected="false" aria-controls="view-todo" tabindex="-1">待办</button>
       </div>
+      <span id="toolbar-count" class="toolbar-count" aria-live="polite"></span>
       <!-- 网站导航：hover 展开快捷方式面板（数据来自 config/nav.json，无配置时整体隐藏） -->
       <div class="nav hidden" id="nav-root">
         <button id="btn-nav" class="btn btn-nav" aria-label="网站导航"
