@@ -11,6 +11,7 @@
  */
 
 const MANAGER_URL = chrome.runtime.getURL('manager/manager.html');
+const TODO_URL = chrome.runtime.getURL('todo/todo.html');
 
 chrome.runtime.onInstalled.addListener(async () => {
   const data = await chrome.storage.local.get(['schemaVersion', 'collectEnabled']);
@@ -45,15 +46,15 @@ chrome.storage.local.get('collectEnabled')
   .catch(() => { /* storage 不可用时忽略 */ });
 
 chrome.action.onClicked.addListener(async () => {
-  // 若管理页已经打开，直接切过去，避免重复开 tab
-  const tabs = await chrome.tabs.query({ url: MANAGER_URL });
+  // 打开待办页面
+  const tabs = await chrome.tabs.query({ url: TODO_URL });
   if (tabs.length > 0) {
     await chrome.tabs.update(tabs[0].id, { active: true });
     if (tabs[0].windowId != null) {
       await chrome.windows.update(tabs[0].windowId, { focused: true });
     }
   } else {
-    await chrome.tabs.create({ url: MANAGER_URL });
+    await chrome.tabs.create({ url: TODO_URL });
   }
 });
 
