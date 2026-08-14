@@ -1,27 +1,41 @@
 # 代码事实清单 — text-collector
 
-> 生成方式：对当前代码快照（v0.8.1，2026-08-14）的源码逐文件扫描，仅记录代码中可证明存在的内容。
+> 生成方式：对当前代码快照（v1.0.0，2026-08-15）的源码逐文件扫描，仅记录代码中可证明存在的内容。
 > 修订记录：
 > - 2026-08-12 — 根据用户确认，将「导入功能」状态由「待确认（无证据）」更正为「已删除」（见 §4.3）。
 > - 2026-08-13（v0.8.0）— 新增网站导航模块（`manager/nav.js` + `config/nav.json`）相关事实：§2 模块表、§3.1 操作表、§5.1/5.3 接口、§6.2 内存状态、§8.5 配置文件；并记录导航面板分栏与 tooltip 的样式修复。
 > - 2026-08-14（v0.8.1）— 顶部记录数与导航快捷方式名称统一使用品牌副标题 `manager` 的无衬线字体栈（§9）。
-> - 2026-08-15（v1.0 待办功能）— 新增待办功能相关事实：§1 待办页面、§2 待办模块、§3.4 待办页面操作、§4.4 待办存储键、§4.5 待办对象字段、§5.4 待办接口、§6.4 待办内存状态；SW 点击图标行为由打开管理页改为打开待办页面。
+> - 2026-08-15（v1.0.0 待办功能）— **重大重写**：旧版独立 `todo.html` 整页替换设计被回退，v1.0.0 实际为**同页 Tab 切换**（`manager.html` 内 hash 路由 `#collect` / `#todo[/...]`）。本版事实重写：§1 页面/路由、§2 模块表、§3.4 待办操作表、§4.4 待办存储键、§4.5 待办对象字段、§5.4 待办接口、§6.4 待办内存状态、§8.6 包管理脚本、§9 版本与变更。`todo/` 子目录与 `todo.html` **已被删除**（commit `2b681d3`）；当前实现位于 `manager/todo.js` + `manager/todo.css` + `utils/todo-storage.js`。
 > 扫描范围：`text-collector/` 全部源码、`manifest.json`、`package.json`、`vitest.config.js`、`tests/`、`design/`（图标生成工具）。
-> 排除范围：`docs/archive/`（按要求禁止参考）、`node_modules/`、`.git/`、二进制产物（PNG）。
+> 排除范围：`docs/archive/`（按要求禁止参考）、`node_modules/`、`.git/`、二进制产物（PNG）、`todo/`（已删除）。
 > 置信度：**高** = 代码直接证明；**中** = 代码 + 注释推断；**低** = 推测。无法判断处标注「待确认」。
 
 ---
 
 ## 1. 页面 / 路由清单
 
-本项目为 **Chrome MV3 扩展**，无传统路由、无多页面应用框架（无任何 router 代码）。唯一可打开的页面：
+本项目为 **Chrome MV3 扩展**，无传统路由、无多页面应用框架（无任何 router 代码）。v1.0.0 实际打开的扩展页面：
 
 | 页面 | 路径 | 用途 | 打开方式 | 置信度 |
 |------|------|------|----------|--------|
-| 管理页 | `text-collector/manager/manager.html` | 查看/管理采集记录（列表、复制、删除、导出、收藏、编辑、开关） | 点击工具栏图标由 SW 创建或聚焦（`background/service-worker.js` → `chrome.tabs.create` / `tabs.query`+`tabs.update`）；URL 由 `chrome.runtime.getURL('manager/manager.html')` 生成 | 高 |
-| 待办页面 | `text-collector/todo/todo.html` | 清单管理、待办事项 CRUD、模板管理、视图切换（全部待办/已完成/模板库） | 点击工具栏图标由 SW 创建或聚焦（`background/service-worker.js` → `chrome.tabs.create` / `tabs.query`+`tabs.update`）；URL 由 `chrome.runtime.getURL('todo/todo.html')` 生成；顶部品牌"待办"可跳转管理页，管理页品牌"manager"可跳转待办页面 | 高 |
+| 管理页（采集 + 待办同页 Tab） | `text-collector/manager/manager.html` | 单一管理页，hash 路由切换两个 tab：<br>· `#collect`（默认）= 采集 tab（列表、复制、删除、导出、收藏、编辑、开关）<br>· `#todo` = 待办工作台；`#todo/all` / `#todo/done` / `#todo/templates` / `#todo/list/<id>` = 待办内 4 视图 | 点击工具栏图标由 SW 创建或聚焦（`background/service-worker.js` → `chrome.tabs.create` / `tabs.query`+`tabs.update`），URL 由 `chrome.runtime.getURL('manager/manager.html')` 生成；管理页 init 时 `applyRouteFromHash` 读取 hash 切到对应 tab | 高 |
+| ~~（已删除）独立待办页面~~ | ~~`text-collector/todo/todo.html`~~ | ~~清单管理、待办事项 CRUD、模板管理、视图切换~~ | **v1.0.0 已被移除**（commit `2b681d3` 整段重写后）；当前不存在此文件 | — |
 | （无）工具栏 popup | — | `manifest.json` 中 `"action": {}` 为空对象、无 `default_popup` 字段 | — | 高 |
 | （无）background 页面 | — | MV3 使用 service worker（`"background": { "service_worker": "background/service-worker.js" }`），无 background 页面 | — | 高 |
+
+**Hash 路由协议**（`manager.js applyRouteFromHash` + `todo.js handleHashChange`）：
+
+| Hash | 主视图 | 待办内视图 |
+|------|--------|------------|
+| 空 / `#collect` | 采集 tab | — |
+| `#todo` | 待办 tab | 当前清单的工作台（fallback：第一个清单或今日待办） |
+| `#todo/all` | 待办 tab | 全部待办（跨清单未完成汇总） |
+| `#todo/done` | 待办 tab | 已完成（跨清单已完成汇总） |
+| `#todo/templates` | 待办 tab | 模板库卡片网格 |
+| `#todo/list/<id>` | 待办 tab | 指定清单的工作台 |
+| 陌生 hash | 视为空 hash = 采集 | — |
+
+> 采集 tab 与待办 tab 由 manager.js 切主视图（`.hidden` 切换 `#view-collect` / `#view-todo`、置灰采集开关、隐藏/显示 toolbar 计数与导出按钮）；待办内 4 视图由 todo.js 根据 `location.hash` 段切 `state.currentView` 与 `state.currentListId`，URL 与 `state` 双向同步（`writeHash`）。
 
 内容脚本（非页面）：`content/content.js` + `content/content.css` 由 `manifest.json` 声明注入到 `<all_urls>` 匹配的所有页面（`run_at: document_idle`，`all_frames: false`），在宿主页面内渲染 toast（closed Shadow DOM）。
 
@@ -42,11 +56,11 @@
 | 管理页 Toast | `manager/toast.js` | `showToast`（单实例，kind: success/info/danger，可带操作按钮）、`dismiss`；`ICON_BOOKMARK_OUTLINE`/`ICON_BOOKMARK_SOLID`/`ICON_TRASH`/`ICON_CHECK`/`ICON_INFO`/`ICON_ALERT` 常量 | render.js、export.js、manager.js |
 | 导出 | `manager/export.js` | `handleExport(format)`（TXT 带 UTF-8 BOM / JSON 含 schemaVersion）、`downloadBlob` | manager.js（导出菜单项点击） |
 | 管理页样式 | `manager/manager.css` | 全部视觉样式 + `:root` CSS 变量（主题色板） | manager.html `<link>` 引入 |
-| 单元测试 | `tests/storage.test.js`、`tests/content.test.js`、`tests/nav.test.js`、`tests/helpers/load-source.js` | 用语法提取纯函数（`extractFunction`/`extractObjectLiteral`）在 Node 环境运行 vitest；16 + 39 + 9 = 64 个用例 | `npm test`（vitest，见 `package.json`/`vitest.config.js`，environment: node） |
+| 单元测试 | `tests/storage.test.js`、`tests/content.test.js`、`tests/nav.test.js`、`tests/todo-storage.test.js`、`tests/helpers/load-source.js` | 用语法提取纯函数（`extractFunction`/`extractObjectLiteral`）在 Node 环境运行 vitest；storage 16 + content 39 + nav 9 + todo-storage 36 = **100** 个用例 | `npm test`（vitest，见 `package.json`/`vitest.config.js`，environment: node） |
 | 图标生成工具（开发期，非运行时） | `design/`（`make-icons.js`、`icon-spec.js`、`preview.js`、`build-icon.js` 等） | 参数化生成 `icons/icon16/48/128.png`（依赖 sharp） | `design/package.json` 脚本 `npm run icons` / `npm run preview`；产物被 manifest 引用，工具本身不进扩展包 |
-| 待办页面入口 | `todo/todo.js` | `init`（加载数据、设置监听、绑定事件）、视图切换（全部待办/已完成/模板库）、`renderView`、`renderListSidebar`、`renderWorkspace`、`renderAll`、`renderDone`、`renderTemplates`、`createList`、`renameList`、`deleteList`、`reorderLists`、`addTodoItem`、`toggleTodoItem`、`deleteTodoItem`、`copyTemplate`、`saveAsTemplate`、`deleteTemplate`、`useTemplate`、`handleLinkClick` | todo.html `<script>` 引入 |
-| 待办数据层 | `utils/todo-storage.js` | `loadLists`、`saveLists`、`loadItems`、`saveItems`、`deleteList`、`deleteItems`、`saveAsTemplate`、`loadTemplates`、`deleteTemplate`、`createListFromTemplate`、`getOrCreateTodayList` | todo.js |
-| 待办页面样式 | `todo/todo.css` | 复用 `manager.css` 的 `:root` CSS 变量和组件样式；`.sidebar`/`.content`/`.workspace`/`.template-grid` 等布局与组件 | todo.html `<link>` 引入 |
+| 待办 tab 入口（v1.0.0） | `manager/todo.js` | `init`（加载数据、设置监听、绑定事件、首启惰性创建今日待办）、4 视图路由（`handleHashChange` / `switchTo` / `writeHash`）、`renderSidebar`、`renderListView`、`renderAllView`、`renderDoneView`、`renderTemplatesView`、`onCreateList` / `startRenameList` / `onDeleteList`、`onAddItem` / `onToggleItem` / `onDeleteItem` / `startEditItem` / 拖拽事件、`onSaveAsTemplate` / `onUseTemplate` / `onCopyTemplateToCurrentList` / `onDeleteTemplate` / `makeTemplateCard` | manager.html `<script>` 引入（位于 manager.js 之前）；通过 `window.__managerBridge` 复用 manager 的 toast / confirm / edit 弹窗 |
+| 待办数据层（v1.0.0） | `utils/todo-storage.js` | 纯函数 + storage Promise：`generateUUID`、`normalizeListName`、`getOrCreateList`、`getOrCreateTodayList`、`getLists`、`createList`、`renameList`、`deleteList`、`getItems`、`saveItems`、`addItem`、`toggleItem`、`deleteItem`、`sortItems`、`loadTemplates`、`saveAsTemplate`、`createListFromTemplate`、`copyTemplateToList`、`deleteTemplate` | manager/todo.js（全部 CRUD 调用）；tests/todo-storage.test.js（36 例） |
+| 待办样式（v1.0.0） | `manager/todo.css` | 同页 Tab 切换下的待办视图样式；**不**重定义 `:root` 变量，直接复用 `manager.css` 已加载的 `--bg` / `--surface` / `--text` / `--blue` 等；自定义类以 `.todo-*` 前缀命名避免与采集模块冲突 | manager.html `<link>` 引入（与 manager.css 并列） |
 
 ---
 
@@ -92,27 +106,35 @@
 |------|------|------|------|------|
 | 在任意网页选中文本（selectionchange，500ms 防抖） | `processSelection`：长度阈值（中≥5 字/英≥3 词加权）、纯符号/数字/URL 过滤、编辑区域跳过、`NFC` 规范化、5000 字截断 → `addSnippet`（去重/扩选替换/新增） | 新增或替换：toast「已采集」（success）；去重：toast「已采集过」（info） | `addSnippet` reject：toast「采集失败」（danger）；`Extension context invalidated` 错误静默不提示 | content.js |
 
-### 3.4 待办页面（todo.html）
+### 3.4 待办 tab（manager.html 的 `#view-todo` 区，由 `manager/todo.js` 渲染）
+
+> v1.0.0 没有独立 `todo.html`；待办是管理页 `#view-todo` 区，通过 hash `#todo[/...]` 路由进入。
 
 | 操作（元素） | 触发的行为 | 成功反馈 | 失败反馈 | 来源 |
 |------|------|------|------|------|------|
-| 点击品牌"待办" | `handleLinkClick('manager')` → `location.href` 跳转管理页 | 管理页打开 | — | todo.js |
-| 点击品牌"manager"（管理页底部链接） | `handleLinkClick('todo')` → 打开待办页面 | 待办页面打开/聚焦 | — | todo.js |
-| 点击左侧清单项 `.list-item` | 切换 `activeListId`，渲染该清单的待办项 | 右侧内容区更新为对应清单 | — | todo.js |
-| 输入框 `#new-list-input` + Enter | `createList` → 创建新清单 | 侧边栏新增清单项并激活 | 名称为空则不创建 | todo.js |
-| 清单项 `.list-name` 双击 | 进入编辑模式（inline contenteditable） | 可编辑状态 | — | todo.js |
-| 编辑后 Enter/Blur | `renameList` 保存新名称 | 清单名称更新 | — | todo.js |
-| 点击删除按钮 `.btn-delete-list` | `deleteList` → 确认删除后移除清单及全部待办项 | 侧边栏移除清单，切换到其他清单 | — | todo.js |
-| 拖拽清单项 | `reorderLists` 更新排序 | 清单顺序更新（localStorage） | — | todo.js |
-| 点击视图切换标签 `.tab` | `renderView` 切换视图（全部待办/已完成/模板库） | 内容区切换 | — | todo.js |
-| 工作台输入框 `#todo-input` + Enter | `addTodoItem` 添加待办项 | 新增待办项到列表 | 输入为空则不添加 | todo.js |
-| 点击待办项复选框 `.todo-check` | `toggleTodoItem` 切换完成状态 | 复选框样式变化，移到已完成区 | — | todo.js |
-| 点击删除按钮 `.btn-delete`（待办项） | `deleteTodoItem` 删除待办项 | 待办项移除 | — | todo.js |
-| 模板卡片「使用」按钮 `.btn-use` | `useTemplate` → 从模板创建新清单 | 侧边栏新增清单并激活 | — | todo.js |
-| 模板卡片「复制」按钮 `.btn-copy` | `copyTemplate` → 复制模板内容到当前清单 | 当前清单追加模板中的待办项 | 无待办清单时提示 | todo.js |
-| 模板卡片「存为模板」按钮 `.btn-save-as` | `saveAsTemplate` → 将当前清单存为模板 | 模板库新增模板卡片 | 当前无清单时提示 | todo.js |
-| 模板卡片「删除」按钮 `.btn-delete` | `deleteTemplate` → 删除模板 | 模板卡片移除 | — | todo.js |
-| 快捷键 `Ctrl+Shift+S` | 切换采集开关（`commands.toggle-collect`） | badge 变化 | — | manifest.json；service-worker.js |
+| 点击管理页顶部「待办」`<a href="#todo">#brand-todo-link` | `location.hash = '#todo'` → 触发 `hashchange` → `applyRouteFromHash` 切到 `#view-todo` → `todo.js handleHashChange` 解析待办内视图 | 待办 tab 激活；采集开关置灰；toolbar 计数与导出/清空按钮隐藏 | — | manager.js、todo.js |
+| 点击管理页顶部「采集」`<a href="#collect">#brand-collect-link`（或浏览器无 hash） | `location.hash = '#collect'` → 切到 `#view-collect` | 采集 tab 激活；toolbar 完整 | — | manager.js |
+| 点侧边栏「+ 新建清单」`#todo-new-list-btn` | `onCreateList` → `createList('未命名清单')` → 跳到新清单工作台 → 自动进入重命名态 | 新清单出现在侧边栏（按 `order = max+1`）；自动 focus 工作台输入框 | — | todo.js、utils/todo-storage.js |
+| 点击侧边栏清单项 `.todo-list-item` | `switchTo('list', listId)` → `writeHash` → 工作台切换 | 右侧切到该清单工作台；侧边栏高亮 | — | todo.js |
+| 侧边栏清单项 `.todo-list-item-name` 双击 / F2 | `startRenameList(listId)` → `contenteditable=true` 全选 | 可编辑态 | — | todo.js |
+| 重命名 Enter / blur | `renameList(id, newName)` → 同步写 `updatedAt` | 侧边栏 + 工作台标题更新 | 空名 → 静默恢复原值 | utils/todo-storage.js |
+| 重命名 Esc | 取消编辑 | 恢复原值 | — | todo.js |
+| 工作台顶部「删除清单」按钮 `#todo-delete-list-btn`（**仅**此入口） | `showConfirmModal` 二次确认 → `deleteList(id)` | toast「已删除清单」；被删是今日清单 → 重建（下次 init） | — | todo.js、utils/todo-storage.js |
+| 工作台顶部「存为模板」按钮 `#todo-save-template-btn` | 空清单 → toast 拒绝；否则 `showEditModal` 输入模板名（默认取清单名）→ `saveAsTemplate` | 模板库新增卡片 | 空清单 → toast「清单为空，无法存为模板」 | todo.js、utils/todo-storage.js |
+| 工作台输入框 `#todo-add-input` + Enter | `addItem(listId, text)` → 新事项 `order = max(未完成)+1`、`completed=false` | 侧边栏计数 +1；事项插入未完成区 | 空内容 → 静默忽略 | todo.js、utils/todo-storage.js |
+| 复选框 `.todo-check`（`role=checkbox`）/ Space / Enter | `toggleItem(listId, itemId)` → 翻 `completed` + 写/清 `completedAt` | 勾选变绿、文本划线、沉底已完成区 | — | todo.js、utils/todo-storage.js |
+| 待办项文本双击 | `startEditItem(itemId)` → `contenteditable=true` 全选 | 可编辑态 | — | todo.js |
+| 待办项编辑 Enter / blur | `saveItems` 整桶重写 | 文本更新 | 空内容 = 视为删除；与原文相同 = noop | todo.js、utils/todo-storage.js |
+| 待办项编辑 Esc | 取消编辑 | 恢复原值 | — | todo.js |
+| 悬停待办项 → 删除按钮 `.todo-item-delete` | `deleteItem(listId, itemId)`（**无确认、无撤销**） | 待办项移除 | — | todo.js、utils/todo-storage.js |
+| 拖拽未完成项（`.todo-item-handle` 拖到目标项） | HTML5 dragstart/dragover/drop；drop 后整段重写未完成项 `order`；已完成项 `order` 保持不变 | 视觉：`todo-item-drop-above` 提示；顺序更新 | 跨清单、跨「已完成」边界 → 拒绝 | todo.js、utils/todo-storage.js |
+| 侧边栏「全部待办」`#todo-nav-all` | `switchTo('all', null)` → `writeHash` → hash `#todo/all` | 跨清单分组显示未完成事项 | — | todo.js |
+| 侧边栏「已完成」`#todo-nav-done` | `switchTo('done', null)` → hash `#todo/done` | 跨清单分组显示已完成；附「今天/昨天/X 月 X 日」时间 | — | todo.js |
+| 侧边栏「模板库」`#todo-nav-templates` | `switchTo('templates', null)` → hash `#todo/templates` | 卡片网格（`auto-fill minmax(220px, 1fr)`） | — | todo.js |
+| 模板卡「使用该模板」`#todo-template-use` | `onUseTemplate(t)` → `createListFromTemplate` → 跳到新清单工作台 | toast「已基于模板创建「X」」 | — | todo.js、utils/todo-storage.js |
+| 模板卡「复制到当前清单」`#todo-template-copy` | `onCopyTemplateToCurrentList(t)` → `copyTemplateToList` | toast「已复制 N 条到「X」」 | 不在工作台视图 → toast 拒绝；空模板 → toast 拒绝 | todo.js、utils/todo-storage.js |
+| 模板卡删除按钮 | `showConfirmModal` 二次确认 → `deleteTemplate(id)` | toast「已删除模板」 | — | todo.js、utils/todo-storage.js |
+| 浏览器后退 / 前进 | `hashchange` → 路由切回 | 视图切换 | — | 浏览器原生 + manager.js / todo.js |
 
 ---
 
@@ -154,44 +176,50 @@
 
 > 导入功能**已删除**（用户确认：该功能已整体下线，当前代码中无任何导入实现，grep 无 importSnippets / handleImport / 导入 相关代码）。导出 JSON 无对应解析器，导出的数据不可重新导入 —— 置信度：高。
 
-### 4.4 待办存储键（todo-storage.js）
+### 4.4 待办存储键（`utils/todo-storage.js`，v1.0.0 新增）
 
 | 键 | 类型 | 写入点 | 说明 |
 |----|------|--------|------|
-| `todo_lists` | object[] | `saveLists`、`createList`、`renameList`、`deleteList`、`reorderLists` | 清单索引列表，含 id/name/order/createdAt |
-| `todo_items_<listId>` | object[] | `saveItems`、`addTodoItem`、`toggleTodoItem`、`deleteTodoItem`、`deleteItems`、`createListFromTemplate`、`copyTemplate` | 单个清单的待办项列表 |
-| `todo_templates` | object[] | `saveAsTemplate`、`deleteTemplate` | 模板列表，含 id/name/items/createdAt |
-| `todo_today_list_id` | string | `getOrCreateTodayList`（首次创建时） | "今日待办"清单 ID（仅首次创建时写入） |
+| `todo_lists` | TodoList[] | `createList`（push）、`renameList`（name / updatedAt）、`deleteList`（filter）、`getOrCreateTodayList` | 清单索引列表（**单键**），按 `TodoList.order` 升序展示 |
+| `todo_items_<listId>` | TodoItem[] | `createList`（预创建 `[]`）、`addItem`（push）、`toggleItem`（map 翻转）、`deleteItem`（filter）、`saveItems`（整桶重写）、`deleteList`（同步 `remove` 整桶） | 每个清单一个独立桶，**始终数组**（空清单 = `[]`，**不删键**） |
+| `todo_templates` | Template[] | `saveAsTemplate`（push）、`deleteTemplate`（filter） | 模板列表（**单键**） |
+| `todo_today_list_id` | string \| null | `getOrCreateTodayList`（写）；`deleteList`（若是今日清单 → 清） | 「今日待办」清单 id 指针；引用清单被删时由 `getOrCreateTodayList` 幂等恢复 |
+
+> `todo_*` 键与 `snip_*` / `snippets_order` / `collectEnabled` 等采集键**完全互不读写**；`utils/todo-storage.js` 与 `utils/storage.js` 互不依赖（两份独立的 `generateUUID`）。
 
 ### 4.5 待办对象字段
 
 **清单对象**（存储在 `todo_lists`）：
 
-| 字段 | 类型 | 写入点 | 说明 |
-|------|------|--------|------|
-| `id` | string（UUID v4） | `createList`、`getOrCreateTodayList` | `crypto.randomUUID()` |
-| `name` | string | `createList` | 清单名称 |
-| `order` | number | `createList`、`reorderLists` | 排序序号 |
-| `createdAt` | number（epoch ms） | `createList`、`getOrCreateTodayList` | 创建时间 |
+| 字段 | 类型 | 必填 | 写入点 | 说明 |
+|------|------|------|--------|------|
+| `id` | string（UUID v4） | 是 | `createList`、`getOrCreateTodayList` | `crypto.randomUUID()`；同时是 `todo_items_<id>` 桶名后缀 |
+| `name` | string | 是 | `createList`（默认「未命名清单」/「今日待办」）；`renameList`（trim + 60 字符上限） | UI 显示名 |
+| `order` | number | 是 | `createList`（`max+1`） | 侧边栏排序键；**不暴露拖拽/↑↓ UI 入口**，仅按此字段排序 |
+| `createdAt` | number（epoch ms） | 是 | `createList`、`getOrCreateTodayList` | 创建时间；UI 不展示 |
+| `updatedAt` | number（epoch ms） | 是 | `createList` / `renameList` / 任何 items 桶写入 | 最近更新时间；UI「更新于 X」 |
 
 **待办项对象**（存储在 `todo_items_<listId>`）：
 
-| 字段 | 类型 | 写入点 | 说明 |
-|------|------|--------|------|
-| `id` | string（UUID v4） | `addTodoItem` | `crypto.randomUUID()` |
-| `text` | string | `addTodoItem` | 待办内容 |
-| `completed` | boolean | `toggleTodoItem`（`!item.completed`） | 完成状态 |
-| `createdAt` | number（epoch ms） | `addTodoItem` | 创建时间 |
-| `completedAt` | number（epoch ms） | `toggleTodoItem`（标记完成时） | 完成时间（可选） |
+| 字段 | 类型 | 必填 | 写入点 | 说明 |
+|------|------|------|--------|------|
+| `id` | string（UUID v4） | 是 | `addItem` | `crypto.randomUUID()` |
+| `listId` | string | 是 | `addItem` | 所属清单 id（冗余字段，便于跨清单汇总） |
+| `content` | string | 是 | `addItem`（trim + 5000 上限）；编辑回调（trim） | 待办内容 |
+| `order` | number | 是 | `addItem`（`max(未完成)+1`）；拖拽重排后整段重写 | 同清单未完成项排序键；已完成项 `order` 保持不变 |
+| `completed` | boolean | 是 | `addItem`（默认 false）；`toggleItem` | 完成标记 |
+| `completedAt` | number \| null | 是（null） | `toggleItem`（翻转时同步写/清） | 完成时间；「今天/昨天/X 月 X 日」展示 |
+| `createdAt` | number（epoch ms） | 是 | `addItem` | UI 不展示；`sortItems` 同序决胜 |
 
 **模板对象**（存储在 `todo_templates`）：
 
-| 字段 | 类型 | 写入点 | 说明 |
-|------|------|--------|------|
-| `id` | string（UUID v4） | `saveAsTemplate` | `crypto.randomUUID()` |
-| `name` | string | `saveAsTemplate` | 模板名称 |
-| `items` | object[] | `saveAsTemplate` | 模板中的待办项（不含 id/createdAt/completedAt） |
-| `createdAt` | number（epoch ms） | `saveAsTemplate` | 创建时间 |
+| 字段 | 类型 | 必填 | 写入点 | 说明 |
+|------|------|------|--------|------|
+| `id` | string（UUID v4） | 是 | `saveAsTemplate` | `crypto.randomUUID()` |
+| `name` | string | 是 | `saveAsTemplate`（trim + 默认取清单名） | 模板名；模板库卡片标题 |
+| `items` | string[] | 是 | `saveAsTemplate`（`items.map(content)` 文本快照） | 待办文本列表；**不含** id / completed / completedAt / listId |
+| `createdAt` | number（epoch ms） | 是 | `saveAsTemplate` | UI「更新于 X」展示 |
+| `updatedAt` | number（epoch ms） | 是 | `saveAsTemplate` | 同上（v1.0 写入时两者均取 `Date.now()`） |
 
 ---
 
@@ -210,8 +238,8 @@
 | `chrome.runtime.onInstalled` / `onStartup` | 初始化、badge 同步 | service-worker.js |
 | `chrome.action.onClicked` / `setBadgeText` / `setBadgeBackgroundColor` / `setBadgeTextColor` | 图标点击、badge | service-worker.js |
 | `chrome.commands.onCommand` | 快捷键 toggle-collect | service-worker.js |
-| `chrome.tabs.query` / `create` / `update` | 打开/聚焦待办页面 | service-worker.js |
-| `chrome.windows.update` | 聚焦待办页面所在窗口 | service-worker.js |
+| `chrome.tabs.query` / `create` / `update` | 打开/聚焦管理页 | service-worker.js |
+| `chrome.windows.update` | 聚焦管理页所在窗口 | service-worker.js |
 
 ### 5.3 Web 平台 API（宿主页面/管理页内）
 
@@ -226,21 +254,31 @@
 | `window.matchMedia` / `getComputedStyle` | 深色环境探测 | content.js |
 | `fetch(chrome.runtime.getURL(...))` | 读取包内导航配置 `config/nav.json`（同源资源，非外部网络） | nav.js |
 
-### 5.4 待办扩展 API（todo-storage.js → chrome.storage.local）
+### 5.4 待办数据层接口（`utils/todo-storage.js` → `chrome.storage.local`，v1.0.0 新增）
 
-| API | 返回值 | 说明 |
-|-----|--------|------|
-| `loadLists()` | `Promise<Array>` | 读取 `todo_lists` |
-| `saveLists(lists)` | `Promise<void>` | 写入 `todo_lists` |
-| `loadItems(listId)` | `Promise<Array>` | 读取 `todo_items_<listId>` |
-| `saveItems(listId, items)` | `Promise<void>` | 写入 `todo_items_<listId>` |
-| `deleteList(listId)` | `Promise<void>` | 从 `todo_lists` 中移除指定清单 |
-| `deleteItems(listId)` | `Promise<void>` | 删除 `todo_items_<listId>` 键 |
-| `saveAsTemplate(listId, name)` | `Promise<string>` | 将清单存为模板，返回模板 id |
-| `loadTemplates()` | `Promise<Array>` | 读取 `todo_templates` |
-| `deleteTemplate(templateId)` | `Promise<void>` | 从 `todo_templates` 中移除指定模板 |
-| `createListFromTemplate(templateId, newName)` | `Promise<string>` | 从模板创建新清单，返回新清单 id |
-| `getOrCreateTodayList()` | `Promise<string>` | 获取或创建"今日待办"清单，返回清单 id |
+| API | 入参 | 返回值 | 错误约定 | 说明 |
+|-----|------|--------|----------|------|
+| `generateUUID()` | — | string（UUID v4） | — | 与 storage.js 同实现（复制版），保证 v1.0 待办模块独立可测试 |
+| `normalizeListName(name, fallback)` | string?, string | string | — | trim + 60 字符；空/超长 → `fallback`（默认「未命名清单」） |
+| `getOrCreateList(key, fallbackName)` | string, string | `Promise<{id,…} \| null>` | storage 失败 → null | 工具：key 命中且对应清单在 → 返回；否则 `createList` |
+| `getOrCreateTodayList()` | — | `Promise<TodoList>` | — | 见 §4.4；幂等；引用清单被删时清指针后重建 |
+| `getLists()` | — | `Promise<TodoList[]>` | — | 仅读 `todo_lists`，按 `order` 升序 |
+| `createList(name?)` | string? | `Promise<TodoList>` | 无效输入（空/超长）→ throw | name 缺省/空 → 「未命名清单」；`order = max+1`；预创建 `todo_items_<id> = []`；写 `updatedAt` |
+| `renameList(id, newName)` | string, string | `Promise<TodoList \| null>` | trim 后空 → throw；不存在 → null | 同步写 `updatedAt` |
+| `deleteList(id)` | string | `Promise<{deleted, removedItems} \| null>` | 不存在 → null | 同步清 `todo_items_<id>` 桶；若是「今日待办」→ 清 `todo_today_list_id` |
+| `getItems(listId)` | string | `Promise<TodoItem[]>` | — | 缺键视为 `[]` |
+| `saveItems(listId, items)` | string, TodoItem[] | `Promise<void>` | — | 整桶重写；过滤非数组项；空数组保留键 |
+| `addItem(listId, content)` | string, string | `Promise<TodoItem>` | 空内容 → throw | trim + 5000；`order = max(未完成)+1`；写 TodoList.updatedAt |
+| `toggleItem(listId, itemId)` | string, string | `Promise<TodoItem \| null>` | 不存在 → null | 翻 `completed` + 写/清 `completedAt` |
+| `deleteItem(listId, itemId)` | string, string | `Promise<boolean>` | 不存在 → false | 过滤该 id |
+| `sortItems(items)` | TodoItem[] | `TodoItem[]`（副本） | — | 未完成在前（按 `order` 升序）→ 已完成在后（按 `completedAt` 降序）；同 completed+order 按 `createdAt` 决胜 |
+| `loadTemplates()` | — | `Promise<Template[]>` | — | 读 `todo_templates`，缺键视为 `[]` |
+| `saveAsTemplate(listId, templateName?)` | string, string? | `Promise<Template>` | 空清单 → throw | 仅 `items.map(content)` 文本快照 |
+| `createListFromTemplate(templateId, listName?)` | string, string? | `Promise<TodoList>` | — | 建新清单 + 按序 `addItem` 全部未完成态 |
+| `copyTemplateToList(templateId, listId)` | string, string | `Promise<{added} \| null>` | 不存在 → null | 过滤空串；按序追加到目标清单末尾 |
+| `deleteTemplate(id)` | string | `Promise<boolean>` | 不存在 → false | filter 该 id |
+
+**错误约定小结**：参数校验失败 → `throw`；资源不存在 → `null` / `false`；写操作基于 `chrome.storage.local` Promise 串行，无并发竞态。
 
 ---
 
@@ -273,15 +311,20 @@
 - `chrome.storage.onChanged`：SW（badge）、content（开关缓存）、manager（开关 UI + 新记录实时 prepend，3s 后隐藏「新增了 N 条记录」提示条）。
 - 本地修改（删除/撤销/清空）期间 `ignoreAllOrderChanges=true` 抑制 onChanged 重复追加（manager.js）。
 
-### 6.4 待办内存状态（模块级变量，非持久化）
+### 6.4 待办内存状态（`manager/todo.js` 顶部 `state` 对象，非持久化）
 
-| 状态 | 变量 | 位置 | 说明 |
-|------|------|------|------|
-| 清单列表 | `lists` | todo.js 顶部 | 当前所有清单 |
-| 清单待办项映射 | `itemsMap` | todo.js 顶部 | `{ [listId]: Array<TodoItem> }` |
-| 当前视图 | `currentView` | todo.js 顶部 | `'workspace'` / `'all'` / `'done'` / `'templates'` |
-| 当前激活清单 ID | `activeListId` | todo.js 顶部 | 侧边栏高亮状态 |
-| 模板列表 | `templates` | todo.js 顶部 | 当前所有模板 |
+| 状态 | 变量 | 说明 |
+|------|------|------|
+| 清单列表 | `state.lists` | 当前所有清单（按 `order` 升序） |
+| 待办项映射 | `state.itemsByList` | `{ [listId]: TodoItem[] }` |
+| 模板列表 | `state.templates` | 当前所有模板（按 `createdAt` 降序） |
+| 当前清单 | `state.currentList` | 正在显示工作台的清单对象（null = 无） |
+| 当前清单 id | `state.currentListId` | 同上的 id；与 `location.hash` 同步 |
+| 当前视图 | `state.currentView` | `'list'` / `'all'` / `'done'` / `'templates'` |
+| 显示已完成折叠态 | `state.showCompleted` | 当前清单的「已完成 N」区折叠/展开 |
+| 本地修改抑制标志 | `state.isApplyingLocalChange` | 与 manager.js 的 `ignoreAllOrderChanges` 同模式；本地写期间 set true，期间忽略 `onChanged` 回响 |
+| 模板按钮 hover 状态 | `state.hoveredTemplateId` | 当前 hover 的模板卡 id（用于显示「使用该模板」/「复制到当前清单」） |
+| 当前待办项编辑中的 id | `state.editingItemId` | `contenteditable` 态下的事项 id（用于 Enter / Esc / blur 处理） |
 
 ---
 
@@ -344,25 +387,41 @@
 
 ### 8.6 包管理脚本
 
-- `package.json`：`version` 0.8.1；scripts `test`（`vitest run`）、`test:watch`；devDependencies 仅 `vitest ^4.1.10`。
+- `package.json`：`version` 1.0.0；scripts `test`（`vitest run`）、`test:watch`；devDependencies 仅 `vitest ^4.1.10`。
 - `design/package.json` scripts：`icons`（`node make-icons.js`）、`preview`；依赖 `sharp ^0.35.3`（仅图标生成用，不在扩展运行时）。
+
+### 8.7 待办运行时配置（v1.0.0）
+
+> 待办模块刻意**不**抽离独立 CONFIG，全部阈值硬编码在 `utils/todo-storage.js` / `manager/todo.js` 函数内（与项目"小模块零配置"约定一致）：
+
+| 项 | 值 | 位置 |
+|----|----|------|
+| 事项 `content` 长度上限 | 5000 字符 | `addItem` 内部 |
+| 清单名 `name` 长度上限 | 60 字符 | `normalizeListName` |
+| 事项默认排序键 | `order = max(未完成)+1` | `addItem` |
+| 拖拽接受 | 仅未完成项；跨清单/跨完成边界拒绝 | `manager/todo.js` 拖拽事件 |
 
 ---
 
-## 9. 版本与本版变更（待办功能）
+## 9. 版本与本版变更（v1.0.0）
 
 - 版本号：`manifest.json` / `package.json` 均为 **1.0.0**（上一版 0.8.1）。
-- **新增待办功能**（`todo/` 目录）：
-  - 新增页面：`todo/todo.html`（整页替换管理页内容区）、`todo/todo.css`（复用 `manager.css` 变量）、`todo/todo.js`（页面入口模块）
-  - 新增数据层：`utils/todo-storage.js`（封装 `chrome.storage.local` 操作，`todo_`/`todo_items_`/`todo_templates` 前缀键）
-  - 左侧导航：多清单支持（创建/重命名/删除/拖拽排序）
-  - 右侧内容区：四个视图（工作台/全部待办/已完成/模板库）
-  - 模板管理：存为模板、使用模板创建新清单、复制、删除
-  - 点击扩展图标行为变更：原来打开管理页，现在打开待办页面
-- 管理页与待办页面可相互跳转（顶部品牌链接）
-- 存储：待办数据**独立**于采集记录，使用 `todo_` 前缀键
-- 样式：待办页面复用 `manager.css` 的 `:root` CSS 变量和组件样式
-- 采集记录管理、采集功能、导航配置、快捷键、导出格式、manifest 权限**均无变化**。
+- **新增待办功能**（同页 Tab，非独立页面）：
+  - 管理页顶部 brand 区域新增「待办」`<a href="#todo">` 入口；hash 路由 `#collect` / `#todo[/...]` 切换采集/待办 tab；
+  - 待办内 4 视图（工作台 / 全部待办 / 已完成 / 模板库）由 hash 段驱动（`#todo` / `#todo/all` / `#todo/done` / `#todo/templates` / `#todo/list/<id>`）；
+  - 双层路由：manager.js `applyRouteFromHash` 切主视图；todo.js `handleHashChange` 切待办内视图；
+  - 待办模块：`manager/todo.js`（视图渲染 + 事件 + 拖拽）+ `manager/todo.css`（复用 `manager.css` 的 `:root` 变量）；
+  - 数据层：`utils/todo-storage.js`（纯函数 + storage Promise；与 `utils/storage.js` 互不依赖）；
+  - 4 视图：工作台（清单详情 + X/Y 进度 + 事项列表 + 输入框 + 存为模板/删除清单 + 拖拽）/ 全部待办（跨清单分组）/ 已完成（跨清单分组 + 时间）/ 模板库（卡片网格 + 使用/复制/删除）；
+  - 模板：仅从清单存为模板（文本快照，不含 id/时间戳）；使用模板创建新清单；复制到当前清单；删除；
+  - 首启惰性创建「今日待办」：`getOrCreateTodayList`，引用清单被删时幂等恢复。
+- **点击扩展图标行为**：**未变**——SW 仍 `tabs.create({url: 'manager/manager.html'})`（无 hash），管理页 `applyRouteFromHash` 视为空 = 采集 tab。**与 v0.8.1 完全一致**。
+- **管理页顶部 brand 形态回到 v0.8.1**（svg mark + 「采集」纯文字 + `<a href="#todo">待办</a>`），**无箭头、无激活态视觉**。
+- **存储**：待办数据**完全独立**于采集记录，使用 `todo_` 前缀键；与 `snip_*` / `snippets_order` / `collectEnabled` 互不读写。
+- **样式**：待办 CSS（`.todo-*` 前缀）复用 `manager.css` 已加载的 `:root` 变量，不重定义。
+- **测试总数**：64 → **100**（新增 `tests/todo-storage.test.js` 36 例）。
+- **采集记录管理、采集功能、采集开关、导航配置、快捷键、导出格式、manifest 权限均无变化**。
+- **删除**：旧版 v0.8 错误实现的 `todo/` 子目录与 `todo.html` 已被 v1.0.0 移除（commit `2b681d3` 整段重写后）。
 
 ---
 

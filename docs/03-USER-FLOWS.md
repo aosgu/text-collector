@@ -1,7 +1,7 @@
 # 用户流程 — 网页文字采集器
 
-> 依据：`docs/_facts.md` 与代码（v0.8.1，2026-08-14）。以下为关键用户流程（8 个，流程 8 为 v0.8.0 新增），每个流程给出步骤与状态迁移。
-> 说明：代码中**不存在**显式的流程图/状态机文件（无 mermaid/dot/状态机库）；以下「状态迁移」均取自代码中可证明的状态变化：`addSnippet` / `toggleFavoriteSnippet` 的返回 action 分支、`clearAllSnippets` 的字段迁移、`chrome.storage.local` 键的变化。
+> 依据：`docs/_facts.md` 与代码（v1.0.0，2026-08-15）。以下为关键用户流程（12 个；流程 8 为 v0.8.0 新增；流程 9–12 为 v1.0.0 新增的待办），每个流程给出步骤与状态迁移。
+> 说明：代码中**不存在**显式的流程图/状态机文件（无 mermaid/dot/状态机库）；以下「状态迁移」均取自代码中可证明的状态变化：`addSnippet` / `toggleFavoriteSnippet` / `addItem` / `toggleItem` / `saveAsTemplate` 等的返回 action 分支、`clearAllSnippets` 的字段迁移、`chrome.storage.local` 键的变化。
 
 ---
 
@@ -201,8 +201,165 @@ saved: true→false（clearedFromHome=true）→ action:'deleted'（彻底删除
 
 | 机制 | 说明 | 位置 |
 |------|------|------|
-| 实时同步 | `chrome.storage.onChanged` 驱动：新记录追加（manager）、开关同步（manager/content/SW badge） | 三处订阅 |
+| 实时同步 | `chrome.storage.onChanged` 驱动：新记录追加（manager）、开关同步（manager/content/SW badge）、待办变更重新渲染（todo.js） | 三处订阅 |
 | 本地修改抑制 | `ignoreAllOrderChanges` 防止删除/撤销/清空期间 onChanged 重复操作 | `manager/manager.js` |
 | 并发写保护 | `addSnippet` 写后校验重试 ≤3 次；`clearAllSnippets` 3 轮校验 | `utils/storage.js` |
 | 孤儿兜底 | 管理页打开时 24h 节流扫描，捞回 order 外记录 | `adoptOrphanSnippets` |
 | 状态通道 | `listBridge` 命名 getter/setter 收敛 `currentOffset/totalCount/isLoading` 等修改点 | `manager/manager.js` |
+| 待办 hash 路由 | `#collect` / `#todo[/...]` 双层路由：manager.js 切主视图，todo.js 切待办内视图 | `applyRouteFromHash` + `handleHashChange` |
+| 数据隔离 | `snip_*` / `snippets_order` 与 `todo_*` 互不读写，两模块互不感知 | `chrome.storage.local` 键命名空间 |
+| Bridge 跨模块复用 | `window.__managerBridge` 把 showToast / showConfirm / showEdit 暴露给 todo.js | `manager/manager.js` |
+
+---
+
+## 流程 9：从采集 tab 切到待办 tab（v1.0.0）
+
+**入口**：管理页头部 brand 区域「待办」链接 `#brand-todo-link`。
+
+| 步骤 | 动作 | 状态迁移 / 数据变化 | 代码位置 |
+|------|------|---------------------|----------|
+| 1 | 点击「待办」`<a href="#todo">` | `location.hash = '#todo'`；浏览器改 hash | 浏览器默认行为 |
+| 2 | 触发 `hashchange` | `window.addEventListener('hashchange', applyRouteFromHash)` 收到事件 | `manager/manager.js` |
+| 3 | `applyRouteFromHash` 切换主视图 | `#view-collect` 加 `.hidden`；`#view-todo` 移除 `.hidden`；`#collect-toggle` 加 `.is-disabled` + `aria-disabled="true"`；`#toolbar-count` 加 `.hidden`；`#collect-toolbar-extras` 加 `.hidden` | 同上 |
+| 4 | `TodoApp.handleHashChange` 解析待办内视图 | hash `#todo`（无后续段）→ `currentView='list'`，`currentListId` fallback 到第一个清单或今日待办 | `manager/todo.js` |
+| 5 | todo.js 渲染 | `renderSidebar`（侧边栏清单列表 + 导航）+ `renderContent`（工作台/汇总/模板） | 同上 |
+| 6 | 首启惰性创建「今日待办」 | `getOrCreateTodayList`（init 阶段已跑过；此处若被删则重建） | `utils/todo-storage.js` |
+| 7 | 回到「采集」链接 → 逆向对称流程 | `location.hash = '#collect'` → 触发 `applyRouteFromHash` → 主视图切回 | — |
+
+**状态迁移**：
+
+```
+#collect（默认）    ──点"待办"──▶   #todo
+   主视图: 采集                 主视图: 待办
+   toggle 可点                 toggle 置灰
+   toolbar-count 显示            toolbar-count 隐藏
+   collect-extras 显示           collect-extras 隐藏
+   #view-collect 显示            #view-todo 显示
+```
+
+**边界**：hash 已是 `#todo` 时点同一链接 → click 兜底 `applyRouteFromHash` 强制应用一次（避免 hashchange 不触发导致"无反应"）。
+
+**涉及**：`manager/manager.html`（brand-link）、`manager/manager.js`（`applyRouteFromHash` / `setupBrandLinks` / `hashchange` 监听）、`manager/todo.js`（`handleHashChange` / init）。
+
+## 流程 10：创建清单并添加第一条待办（v1.0.0）
+
+**入口**：待办 tab 侧边栏「+ 新建清单」按钮。
+
+| 步骤 | 动作 | 状态迁移 / 数据变化 | 代码位置 |
+|------|------|---------------------|----------|
+| 1 | 点击「+ 新建清单」 | `onCreateList()` → `createList('未命名清单')` | `manager/todo.js` |
+| 2 | `createList` 创建 | 存储：`todo_lists` push 新清单（`order = max+1`）；预创建空 `todo_items_<id> = []` | `utils/todo-storage.js` |
+| 3 | 跳到新清单工作台 | `state.currentListId = list.id`；`writeHash()` → `location.hash = '#todo/list/<id>'` | `manager/todo.js` |
+| 4 | 自动进入重命名态 | `setTimeout(() => startRenameList(list.id), 30)` → 侧边栏 name `contenteditable=true` 全选 | 同上 |
+| 5 | 用户输入新名 + Enter / blur | `renameList(id, newName)` → 存储更新 `name` + `updatedAt` | `utils/todo-storage.js` |
+| 6 | 工作台输入框自动 focus | `setTimeout(() => input.focus(), 0)` | `manager/todo.js` |
+| 7 | 用户输入待办文本 + Enter | `addItem(listId, text)` → 存储 push 新项（`order = max(未完成)+1`，`completed=false`）；写 `updatedAt` | `utils/todo-storage.js` |
+| 8 | UI 重渲染 | 侧边栏计数 +1、内容区新项插入未完成区 | `manager/todo.js` |
+
+**状态迁移**（核心三步）：
+
+```
+清单集合: [A,B]                  ──create──▶    [A,B,C]
+items 桶:   A:[], B:[]                       A:[], B:[], C:[]
+order 字段: A:1, B:2                          A:1, B:2, C:3
+today 标记: 不变（今天待办独立存在）            不变
+
+items(新清单): []
+            ──addItem("带钥匙")──▶  [{content:"带钥匙", order:1, completed:false, completedAt:null}]
+```
+
+**边界**：
+- `createList` 缺省 name → 「未命名清单」；name trim 后空 → 「未命名清单」；
+- `addItem` 空内容 trim → throw → UI 静默 catch；
+- 重命名 Esc 取消 → 恢复原值；blur 提交；trim 后空名拒绝；
+- 自动进入重命名态是 30ms 延迟（避免与 input focus 抢焦点）。
+
+**涉及**：`utils/todo-storage.js`、`manager/todo.js`。
+
+## 流程 11：勾选完成 → 汇总视图查看（v1.0.0）
+
+**入口**：工作台复选框；侧边栏「全部待办」「已完成」按钮。
+
+| 步骤 | 动作 | 状态迁移 / 数据变化 | 代码位置 |
+|------|------|---------------------|----------|
+| 1 | 点击复选框 | `onToggleItem(listId, itemId)` → `toggleItem` | `manager/todo.js` / `utils/todo-storage.js` |
+| 2 | 翻 completed + 写/清 completedAt | 存储：`item.completed = !prev`；`completedAt = prev ? null : Date.now()` | 同上 |
+| 3 | UI 重渲染 | sortItems 把已完成项移到列表底部；勾选框变绿 + 文本划线 | `manager/todo.js` |
+| 4 | 点侧边栏「全部待办」 | `switchTo('all', null)` → `writeHash` → hash `#todo/all` | 同上 |
+| 5 | `renderAllView` 按清单分组 | 遍历 `state.lists` × `itemsByList.get(id).filter(!completed)`；过滤空组 | 同上 |
+| 6 | 每组显示清单名 + 计数 + 复选框（仍可点） | — | 同上 |
+| 7 | 点侧边栏「已完成」 | 切到 `done` 视图；每项文本后追加 `formatTime(completedAt)`（今天/昨天/X月X日） | 同上 |
+| 8 | 在「已完成」视图点复选框 | 同流程 1 反向（恢复未完成）；视图会动态更新（因为 itemsByList 同步刷新） | — |
+
+**状态迁移**：
+
+```
+items(清单 X): [
+  {content:"带钥匙", order:1, completed:false, completedAt:null},   ← 未完成
+  {content:"带手机", order:2, completed:true,  completedAt:1723728000000}  ← 已完成
+]
+
+toggleItem("带手机")
+  ↓
+  completed: true → false
+  completedAt: 1723728000000 → null
+  order 字段保持 2（sortItems 内 completed: false → 排到未完成区）
+```
+
+**边界**：
+- `sortItems` 中「同 completed + 同 order」按 `createdAt` 决胜（保证稳定排序）；
+- 跨清单汇总视图下点复选框：原清单状态同步变更（共享 `state.itemsByList`）；
+- 已完成区可点击「已完成 N」label 折叠/展开（`state.showCompleted`）。
+
+**涉及**：`utils/todo-storage.js`（`toggleItem` / `sortItems`）、`manager/todo.js`（`onToggleItem` / `renderListView` / `renderAllView` / `renderDoneView` / `formatTime`）。
+
+## 流程 12：把清单存为模板 → 用模板建新清单（v1.0.0）
+
+**入口**：工作台顶部「存为模板」按钮；模板库视图「使用该模板」按钮。
+
+| 步骤 | 动作 | 状态迁移 / 数据变化 | 代码位置 |
+|------|------|---------------------|----------|
+| 1 | 在某清单工作台点「存为模板」 | `onSaveAsTemplate(list)` → 空清单 → toast 拒绝；否则 `showEditModal` 输入模板名（默认取清单名） | `manager/todo.js` / `manager/modal.js` |
+| 2 | 提交模板名 | `saveAsTemplate(listId, name)` → 存储：`todo_templates` push 新模板，`items = items.map(content)` 文本快照（**不含** id / completed / 时间戳） | `utils/todo-storage.js` |
+| 3 | 侧边栏「模板库」 | `switchTo('templates', null)` → 渲染卡片网格 | `manager/todo.js` |
+| 4 | 点某模板卡「使用该模板」 | `onUseTemplate(t)` → `createListFromTemplate(t.id)` → 存储：建新清单（同模板名）→ 按顺序 `addItem` 全部模板内容（未完成态） | 同上 |
+| 5 | 自动跳到新清单工作台 | `state.currentListId = list.id`；hash `#todo/list/<id>` | 同上 |
+| 6 | toast「已基于模板创建「X」」 | — | 同上 |
+| 7 | 在某工作台点模板卡「复制到当前清单」 | `onCopyTemplateToCurrentList(t)` → 当前清单必须存在；空模板 → toast 拒绝；否则 `copyTemplateToList` 按顺序追加 → 返回 `{added}` → toast「已复制 N 条到「X」」 | 同上 |
+| 8 | 删除模板卡 | `onDeleteTemplate(t)` → `showConfirmModal` 二次确认 → `deleteTemplate(id)` | 同上 |
+
+**状态迁移**（核心两步）：
+
+```
+清单 X: {id:X, name:"出差准备", items:[
+  {content:"确认机票酒店", completed:false},
+  {content:"打包衣物",     completed:false}
+]}
+                │
+                │  saveAsTemplate(X, "出差清单 v1")
+                ▼
+todo_templates: [{id:T1, name:"出差清单 v1", items:["确认机票酒店", "打包衣物"]}]
+
+创建模板后 X 仍在，清单本身不动；模板是内容快照，与原清单生命周期解耦
+────────────────────────────────────────────────────────────
+
+todo_templates: [{id:T1, items:["确认机票酒店","打包衣物"]}]
+                │
+                │  createListFromTemplate(T1, "三月出差")
+                ▼
+todo_lists:   [..., {id:Y, name:"三月出差", order:N}]
+todo_items_Y: [
+  {id:i1, listId:Y, content:"确认机票酒店", completed:false, order:1},
+  {id:i2, listId:Y, content:"打包衣物",     completed:false, order:2}
+]
+```
+
+**边界**：
+- 空清单不能存为模板（`onSaveAsTemplate` 先检查 items.length）；
+- 模板名 trim 后空 → 取清单名；
+- 「复制到当前清单」要求 `currentList` 存在（不在工作台视图则 toast 拒绝）；
+- 删除模板不影响已用该模板创建的清单（`createListFromTemplate` 是值复制，不是引用）；
+- 模板库无模板时显示空态引导。
+
+**涉及**：`utils/todo-storage.js`（`saveAsTemplate` / `createListFromTemplate` / `copyTemplateToList` / `deleteTemplate` / `loadTemplates`）、`manager/todo.js`（`onSaveAsTemplate` / `onUseTemplate` / `onCopyTemplateToCurrentList` / `onDeleteTemplate` / `makeTemplateCard` / `renderTemplatesView`）、`manager/modal.js`。
+

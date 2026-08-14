@@ -1,6 +1,6 @@
 # 数据模型与数据流 — 网页文字采集器
 
-> 依据：`docs/_facts.md` 与代码（v0.8.1，2026-08-14）。无数据库/无后端；所有**业务数据**在浏览器端 `chrome.storage.local`；另有一份随扩展包分发的**只读配置文件** `config/nav.json`（v0.8.0，见 §1.4 / §3）。
+> 依据：`docs/_facts.md` 与代码（v1.0.0，2026-08-15）。无数据库/无后端；所有**业务数据**在浏览器端 `chrome.storage.local`；另有一份随扩展包分发的**只读配置文件** `config/nav.json`（v0.8.0，见 §1.4 / §3），以及 v1.0.0 起新增的**待办数据**（`todo_` 前缀，见 §1.5–§1.7 / §3）。
 > 「接口」指代码层函数接口（本项目无网络 API）。
 
 ---
@@ -51,6 +51,51 @@
 
 兼容糖：顶层 `links` 数组等价于 `columns: [{ title: '', links }]`。全部栏为空 → `normalizeNavConfig` 返回 `null` → 导航入口整体隐藏。
 
+### 1.5 实体：TodoList（待办清单）— `todo_lists`（v1.0.0 新增）
+
+存储于 `chrome.storage.local` 的 **单键** `todo_lists`，值为 `TodoList[]`。每条清单对应一个独立的 `todo_items_<listId>` 桶存放其事项。
+
+| 字段 | 类型 | 必填 | 写入方 | 语义 |
+|------|------|------|--------|------|
+| `id` | string（UUID v4） | 是 | `createList`（`generateUUID`） | 清单主键；同时作为 `todo_items_<id>` 桶名后缀 |
+| `name` | string | 是 | `createList`（默认「未命名清单」/「今日待办」）；`renameList`（trim + 60 字符上限） | 显示名；UI 侧边栏 + 工作台标题 |
+| `order` | number | 是 | `createList`（`max+1`） | 侧边栏排序键；**清单不暴露拖拽/↑↓ UI 入口，仅按 `order` 字段排序** |
+| `createdAt` | number（epoch ms） | 是 | `createList` | 创建时间；UI 不展示 |
+| `updatedAt` | number（epoch ms） | 是 | `createList` / `renameList` / 任何 items 桶写入 | 最近更新时间；侧边栏「更新于 X」可选展示 |
+
+### 1.6 实体：TodoItem（待办事项）— `todo_items_<listId>`（v1.0.0 新增）
+
+**每个清单一个独立桶**，键为 `todo_items_<listId>`，值为 `TodoItem[]`（**始终数组**，空清单 = `[]`，绝不删除键）。
+
+| 字段 | 类型 | 必填 | 写入方 | 语义 |
+|------|------|------|--------|------|
+| `id` | string（UUID v4） | 是 | `addItem`（`generateUUID`） | 事项主键；用于 toggle / delete / 拖拽定位 |
+| `listId` | string | 是 | `addItem` | 所属清单 id（冗余字段，便于跨清单汇总 `renderAllView`/`renderDoneView`） |
+| `content` | string | 是 | `addItem`（trim + 5000 上限）；编辑回调（trim） | 事项文本 |
+| `order` | number | 是 | `addItem`（`max(未完成)+1`）；拖拽重排后整段重写 | 同清单未完成项排序键；已完成项 `order` 保持不变 |
+| `completed` | boolean | 是 | `addItem`（默认 false）；`toggleItem` | 完成标记 |
+| `completedAt` | number \| null | 是（null） | `toggleItem`（翻转 completed 时同步写/清） | 完成时间；已完成视图按「今天/昨天/X 月 X 日」展示 |
+| `createdAt` | number（epoch ms） | 是 | `addItem` | 创建时间；UI 不展示；`sortItems` 同序决胜 |
+
+### 1.7 实体：Template（模板）— `todo_templates`（v1.0.0 新增）
+
+存储于 `chrome.storage.local` 单键 `todo_templates`，值为 `Template[]`。**模板是事项文本快照**（不含 id / completed / completedAt / listId），与原清单生命周期解耦。
+
+| 字段 | 类型 | 必填 | 写入方 | 语义 |
+|------|------|------|--------|------|
+| `id` | string（UUID v4） | 是 | `saveAsTemplate`（`generateUUID`） | 模板主键 |
+| `name` | string | 是 | `saveAsTemplate`（trim + 默认取清单名） | 模板名；模板库卡片标题 |
+| `items` | string[] | 是 | `saveAsTemplate`（`items.map(content)` 文本快照） | 待办文本列表；过滤空字符串 |
+| `createdAt` | number（epoch ms） | 是 | `saveAsTemplate` | 创建时间；UI「更新于 X」展示 |
+| `updatedAt` | number（epoch ms） | 是 | `saveAsTemplate` | 同上（v1.0 写入时两者均取 `Date.now()`） |
+
+### 1.8 实体：今日待办指针 — `todo_today_list_id`（v1.0.0 新增）
+
+单值键（string | null），指向一个 `TodoList.id`，标记当前「今日待办」清单。
+
+- 由 `getOrCreateTodayList` 写入；引用清单被删除时由 `getOrCreateTodayList` 幂等恢复重建。
+- 仅作为首启惰性创建的定位指针；`todo_lists` 数组本身不包含任何「今日」标记。
+
 ## 2. 实体关系
 
 ```
@@ -63,6 +108,21 @@ snip_<uuid> (Snippet 实体)        collectEnabled / schemaVersion / orphanScanV
 
 - **主键**：`id`（UUID v4），同时出现在存储 key 后缀与 order 列表元素中；两者不一致即产生孤儿（`adoptOrphanSnippets` 收领逻辑）。
 - **无外键/无嵌套关系**：Snippet 之间无引用；title/url/domain/urlKey 为冗余快照字段（采集时写入，编辑不更新）。
+
+```
+todo_lists (TodoList[])
+   │ 1:1
+   ▼
+todo_items_<listId> (TodoItem[])
+
+todo_templates (Template[])         todo_today_list_id (string | null)
+（独立集合，不引用 todo_lists）       （→ todo_lists 中某项的 id；幂等恢复）
+```
+
+- **待办清单与事项**：`todo_lists` 数组中每项的 `id` 对应一个 `todo_items_<id>` 桶；`TodoItem.listId` 字段为冗余引用，UI 跨清单汇总视图（全部待办 / 已完成）通过 `listId` 索引。
+- **模板与清单**：`Template.items` 是**值复制**（`items.map(content)`），不持有对原清单或原事项的引用；删除原清单不影响已创建的模板，使用模板创建新清单后也不影响模板本身。
+- **今日待办指针**：`todo_today_list_id` 与 `todo_lists` 双向弱引用：清单被删后指针失效，`getOrCreateTodayList` 幂等重建。
+- **采集与待办数据完全隔离**：所有 `snip_*` / `snippets_order` / `collectEnabled` 等键与所有 `todo_*` 键**互不读写**，两模块的代码层（`utils/storage.js` vs `utils/todo-storage.js`）也互不引用。
 
 ## 3. 存储位置
 
@@ -80,7 +140,7 @@ snip_<uuid> (Snippet 实体)        collectEnabled / schemaVersion / orphanScanV
 
 | 函数（method） | 入参 | 出参 | 使用位置 |
 |----------------|------|------|----------|
-| `generateUUID()` | — | string（UUID v4） | addSnippet 内部 |
+| `generateUUID()` | — | string（UUID v4） | addSnippet 内部；todo-storage 内部 |
 | `getUrlKey(url)` | string | string（origin+pathname） | addSnippet；tests |
 | `getDomain(url)` | string | string（hostname） | addSnippet；tests |
 | `adoptOrphanSnippets()` | — | Promise\<number\>（收领数） | manager.js init |
@@ -98,6 +158,32 @@ snip_<uuid> (Snippet 实体)        collectEnabled / schemaVersion / orphanScanV
 | `getEarliestDate(filter)` | string | Promise\<number\|null\>（capturedAt） | manager.js handleClearAll |
 | `getStorageEstimate(filter)` | string | Promise\<number\>（KB 估算） | render.js updateRecordInfo |
 
+### 4.1b 待办数据层 `utils/todo-storage.js`（v1.0.0 新增，全局函数，manager + todo 上下文共用）
+
+| 函数 | 入参 | 出参 | 语义与边界 |
+|------|------|------|------------|
+| `generateUUID()` | — | string（UUID v4） | 与 storage.js 同实现（复制版），保证 v1.0 待办模块独立可测试 |
+| `normalizeListName(name, fallback)` | string?, string | string（trim；空/超 60 → `fallback`） | 统一清单名：trim → 空或 > 60 字符 → 落到 `fallback`（默认「未命名清单」） |
+| `getOrCreateList(key, fallbackName)` | string, string | `Promise<{id, …} \| null>`（storage 失败时 null） | 工具：key 已存在且对应清单在 `todo_lists` → 返回；否则 `createList` |
+| `getOrCreateTodayList()` | — | `Promise<TodoList>` | 见 §1.8；幂等；引用清单被删时清理 `todo_today_list_id` 后重建 |
+| `getLists()` | — | `Promise<TodoList[]>`（按 `order` 升序） | 仅读 `todo_lists` |
+| `createList(name?)` | string? | `Promise<TodoList>` | name 缺省/空 → 「未命名清单」；`order = max+1`；同步预创建 `todo_items_<id> = []`；写 `updatedAt = Date.now()` |
+| `renameList(id, newName)` | string, string | `Promise<TodoList \| null>` | trim + 60 字符；trim 后空 → throw；不存在的 id → null |
+| `deleteList(id)` | string | `Promise<{deleted: TodoList, removedItems: number} \| null>` | 同步清 `todo_items_<id>` 桶 + 若是「今日待办」清 `todo_today_list_id`；不存在 → null |
+| `getItems(listId)` | string | `Promise<TodoItem[]>` | 读 `todo_items_<id>`，缺键视为 `[]` |
+| `saveItems(listId, items)` | string, TodoItem[] | `Promise<void>` | 整桶重写；过滤非数组项；空数组 = `[]` 保留键 |
+| `addItem(listId, content)` | string, string | `Promise<TodoItem>` | trim + 5000 上限；空 → throw；`order = max(未完成)+1`；同步 `TodoList.updatedAt` |
+| `toggleItem(listId, itemId)` | string, string | `Promise<TodoItem \| null>` | 翻转 `completed` + 写/清 `completedAt`；不存在 → null |
+| `deleteItem(listId, itemId)` | string, string | `Promise<boolean>` | 过滤掉该 id；不存在 → false |
+| `sortItems(items)` | TodoItem[] | TodoItem[]（副本） | 未完成在前（按 `order` 升序）→ 已完成在后（按 `completedAt` 降序）；同 completed+order 时按 `createdAt` 决胜 |
+| `loadTemplates()` | — | `Promise<Template[]>` | 读 `todo_templates`，缺键视为 `[]` |
+| `saveAsTemplate(listId, templateName?)` | string, string? | `Promise<Template>` | 空清单 → throw；items 仅 `map(content)` 文本快照 |
+| `createListFromTemplate(templateId, listName?)` | string, string? | `Promise<TodoList>` | 建新清单 + 按序 `addItem` 模板内容（未完成态） |
+| `copyTemplateToList(templateId, listId)` | string, string | `Promise<{added: number} \| null>` | 过滤空字符串；不存在模板/清单 → null；按序追加到目标清单末尾 |
+| `deleteTemplate(id)` | string | `Promise<boolean>` | 不存在 → false |
+
+**错误约定**：`createList` / `renameList` / `addItem` / `saveAsTemplate` 对无效输入（空名 / 空内容 / 空清单）`throw new Error`；其他函数对「资源不存在」返回 `null` / `false`。所有写操作底层都基于 `chrome.storage.local` Promise 串行，无并发竞态。
+
 ### 4.2 管理页 UI 模块接口（manager.html 脚本上下文）
 
 | 函数 | 入参 | 出参 | 使用位置 |
@@ -112,6 +198,7 @@ snip_<uuid> (Snippet 实体)        collectEnabled / schemaVersion / orphanScanV
 | `nav.js: initNav()` | — | Promise\<void\> | nav.js 自调用（模块底部，含 `.catch` 兜底） |
 | `export.js: handleExport(format)` | 'txt'\|'json' | Promise\<void\> | manager.js 导出菜单 |
 | `export.js: downloadBlob(blob, filename)` | Blob, string | void | handleExport 内部 |
+| `manager.js: window.__managerBridge` | — | `{ showToast, showConfirmModal, showEditModal }` | v1.0.0：暴露给 `manager/todo.js`，让待办模块复用采集模块的 toast / 弹窗 UI（避免重复实现） |
 
 ### 4.3 Service Worker 接口（事件监听，无导出函数）
 
@@ -139,6 +226,10 @@ snip_<uuid> (Snippet 实体)        collectEnabled / schemaVersion / orphanScanV
 | `collectEnabled` | setCollectEnabled（管理页/快捷键）、onInstalled | content.js（缓存）、manager.js、SW（badge）、getCollectEnabled | content.js、manager.js、SW（三方） |
 | `schemaVersion` | onInstalled | export.js（写入导出文件） | 无 |
 | `orphanScanV1` | adoptOrphanSnippets | adoptOrphanSnippets（节流判断） | 无 |
+| `todo_lists`（v1.0.0） | createList / renameList / deleteList | getLists / getOrCreateList / getOrCreateTodayList / copyTemplateToList（检查存在性） | todo.js（reloadFromStorage 整体重读） |
+| `todo_items_<listId>`（v1.0.0） | addItem / toggleItem / deleteItem / saveItems | getItems（sortItems 处理） | todo.js（reloadFromStorage） |
+| `todo_templates`（v1.0.0） | saveAsTemplate / deleteTemplate | loadTemplates / createListFromTemplate / copyTemplateToList | todo.js（reloadFromStorage） |
+| `todo_today_list_id`（v1.0.0） | getOrCreateTodayList | getOrCreateTodayList | todo.js（init / 重建） |
 
 > `config/nav.json` 不在上表内：它是随包分发的只读文件，写入方为**开发者/用户手工编辑文件**，读取方仅 `manager/nav.js`，无订阅机制（改动后刷新管理页生效）。
 
@@ -205,6 +296,56 @@ normalizeNavConfig（协议白名单 http/https、trim、丢弃空条目与空�
                      │ 用户点击 .nav-link
                      ▼
                   浏览器新标签页打开（target=_blank rel=noopener）
+```
+
+### 5.7 待办 CRUD 数据流（v1.0.0）
+
+```
+todo.js 事件（添加/勾选/删除/编辑/拖拽）
+   │ utils/todo-storage.js 纯函数
+   ▼
+   ├─ addItem      → todo_items_<listId> push 1 项；order=max(未完成)+1；写 TodoList.updatedAt
+   ├─ toggleItem   → todo_items_<listId> 翻转 completed + 写/清 completedAt
+   ├─ deleteItem   → todo_items_<listId> 过滤该 id
+   ├─ saveItems    → 整桶重写（编辑/拖拽后）
+   ├─ createList   → todo_lists push 1 项；预创建 todo_items_<id> = []；写 updatedAt
+   ├─ renameList   → todo_lists 改 name + updatedAt
+   └─ deleteList   → todo_lists 过滤；同步 delete todo_items_<id>；若是今日清单 → 清 todo_today_list_id
+   │
+   ▼
+todo.js reloadFromStorage() 重新读全部状态 + renderSidebar + renderContent
+```
+
+### 5.8 模板数据流（v1.0.0，值复制语义）
+
+```
+saveAsTemplate(listId, name)
+   │ 读 list.items → items.map(content) → 文本数组
+   ▼
+todo_templates push 1 条（id / name / items / createdAt / updatedAt）
+
+createListFromTemplate(templateId, listName?)
+   │ 读 template.items
+   ▼
+createList(name) → todo_lists push；预创建空 todo_items_<id>
+按序 addItem(template.items[i]) 全部（completed=false）
+
+copyTemplateToList(templateId, listId)
+   │ 读 template.items（过滤空字符串）
+   ▼
+按序 addItem 到目标 list（completed=false）；返回 {added: N}
+```
+
+### 5.9 待办实时同步（chrome.storage.onChanged）
+
+```
+todo_lists / todo_items_<id> / todo_templates / todo_today_list_id 任一变更
+   │ chrome.storage.onChanged
+   ▼
+todo.js reloadFromStorage() → 重新读全部状态 + renderSidebar + renderContent
+   │
+   ※ 与 manager.js 相同的本地修改抑制模式（todo.js 内 `isApplyingLocalChange`）：
+     在本地写入完成前 set true、写完 set false，期间忽略 onChanged 的回响
 ```
 
 ## 6. 一致性机制摘要

@@ -1,7 +1,7 @@
 # 功能规格 — 网页文字采集器
 
-> 依据：`docs/_facts.md` 与代码（v0.8.1，2026-08-14）。每个功能包含：用户故事、触发入口、交互流程、输入/输出、边界情况、关联接口/数据/组件、置信度。
-> 交互描述均对应到具体组件（DOM id/class）与文件。共 **21 个功能**（功能 21 为 v0.8.0 新增的网站导航）。
+> 依据：`docs/_facts.md` 与代码（v1.0.0，2026-08-15）。每个功能包含：用户故事、触发入口、交互流程、输入/输出、边界情况、关联接口/数据/组件、置信度。
+> 交互描述均对应到具体组件（DOM id/class）与文件。共 **27 个功能**（功能 21 为 v0.8.0 新增的网站导航；功能 22–27 为 v1.0.0 新增的待办清单）。
 
 ---
 
@@ -293,3 +293,115 @@
 - **样式要点**（`manager.css` `.nav` / `.nav-panel` / `.nav-col` / `.nav-link`）：面板 `position: absolute` 挂在 32px 宽的 `.nav` 上，必须显式 `width: max-content` 才能让各栏并排——否则 shrink-to-fit 会塌缩到 min-content，配合 `flex-wrap: wrap` 使各栏竖向堆叠（v0.8.0 修复）；窄屏分支用 `width: auto` 覆盖。
 - **关联**：`manager/nav.js`（normalizeNavConfig / loadNavConfig / renderNavPanel / initNav）、`config/nav.json`、`manager/manager.html`（`#nav-root`/`#btn-nav`/`#nav-panel`）、`manager/manager.css`、`tests/nav.test.js`（9 例）。
 - **置信度：高**（交互与校验规则代码直接可证；`normalizeNavConfig` 有单测覆盖）。
+
+---
+
+## 功能 22：主视图顶 Tab 切换（采集 / 待办）
+
+> v1.0.0 新增。采集与待办共存于 `manager.html`，通过顶部 brand 区域「采集 / 待办」两段可点击文字入口切换，URL hash 路由驱动。
+
+- **用户故事**：作为用户，我能在同一个管理页内切换采集记录与待办清单，不用开多个页面。
+- **触发入口**：管理页头部 brand 区域：
+  - `采集` → `<a id="brand-collect-link" class="brand-collect" href="#collect">`（serif 18px 600，深色 var(--text)，可点）
+  - `待办` → `<a id="brand-todo-link" class="brand-sub" href="#todo">`（同字号同字重，灰 var(--text-muted)，可点）
+  - 点击扩展图标（SW）→ 默认打开 `manager.html`，无 hash → `applyRouteFromHash` 视为 `#collect` 进采集
+- **交互流程**：
+  1. 点 `采集` 链接 → `location.hash = '#collect'` → 触发 `hashchange` → `applyRouteFromHash()` 隐藏 `#view-todo`、显示 `#view-collect`、解除采集开关置灰、显示 `toolbar-count` 与 `collect-toolbar-extras`；
+  2. 点 `待办` 链接 → `location.hash = '#todo'` → `applyRouteFromHash()` 切到 `#view-todo`、置灰采集开关、隐藏采集计数与导出/清空按钮；
+  3. hash 已是目标值时点同一链接：`setupBrandLinks` 在 click 上兜底再调一次 `applyRouteFromHash`，避免 hashchange 不触发导致"看起来没反应"。
+- **URL hash 协议**（todo.js 也消费同一协议）：
+  - `#collect` → 采集 tab
+  - `#todo` → 待办工作台（默认取当前清单或今日待办）
+  - `#todo/all` / `#todo/done` / `#todo/templates` / `#todo/list/<id>` → 待办内 4 视图
+- **采集开关在待办 tab 下的行为**：`is-disabled` 类 + `aria-disabled="true"`，点击/键盘不响应；视觉上透明度 0.5。回到采集 tab 即恢复。
+- **边界情况**：URL 直接带 `#todo` 打开 → 仍走 `applyRouteFromHash` 正确路由；hash 解析失败（陌生字符串）→ 视为空 hash = 采集。
+- **关联**：`manager/manager.html`（brand-link）、`manager/manager.js`（`applyRouteFromHash` / `setupBrandLinks` / `window.addEventListener('hashchange', ...)`）、`manager/manager.css`（`.brand-collect` / `.brand-sub` / `.toggle.is-disabled`）、`background/service-worker.js`（默认打开 `manager.html`）。
+- **置信度：高**。
+
+## 功能 23：待办 — 清单 CRUD
+
+> v1.0.0 新增。`utils/todo-storage.js` 纯数据层 + `manager/todo.js` 渲染/事件。
+
+- **用户故事**：作为用户，我能在待办 tab 左侧创建多个清单、重命名、删除。
+- **触发入口**：
+  - 「+ 新建清单」按钮 `#todo-new-list-btn`；
+  - 侧边栏清单项点击（切换工作台）/ 双击（重命名）；
+  - 工作台顶部「删除清单」按钮（**仅**此处可删，侧边栏无删除入口）。
+- **交互流程**：
+  - **创建**：`createList(name?)` → name 缺省或 trim 后空 → 「未命名清单」；`order = max(order)+1`（新清单放最下）；同步预创建空 items 桶 `todo_items_<id> = []`；UI：跳到新清单的工作台并自动进入重命名态。
+  - **重命名**：双击 / F2 / Enter 触发 → 侧边栏 `todo-list-item-name` 设 `contenteditable=true` 全选；Enter / blur 保存；Esc 取消；空名拒绝（恢复原值）；trim 后改名同步写 `updatedAt`。
+  - **删除**：工作台「删除清单」按钮 → `showConfirmModal` 二次确认（含清单名 + 不可撤销提示）→ `deleteList(id)`（同步清 items 桶 + 若是「今日待办」清 `todo_today_list_id`）；UI：当前工作台清单被删 → 自动切到 `#todo/all`；toast「已删除清单」（success）。
+- **输入/输出**：清单名 string（trim + 限长 60）；操作结果 → 存储 + 视图切换。
+- **边界情况**：重命名空名 throw → UI 静默恢复；删除不存在 id throw → toast danger；模板引用已删除清单的 items 仍然有效（**模板是 items 文本快照，与原清单生命周期解耦**）。
+- **关联**：`utils/todo-storage.js`（createList / renameList / deleteList / normalizeListName）、`manager/todo.js`（onCreateList / startRenameList / onDeleteList / writeHash）、`manager/modal.js`。
+- **置信度：高**（createList / deleteList 等有 todo-storage.test.js 单测覆盖）。
+
+## 功能 24：待办 — 事项 CRUD（含拖拽）
+
+- **用户故事**：作为用户，我能给当前清单加待办、勾选、删除、改内容、给未完成项排序。
+- **触发入口**：工作台输入框（`Enter` 提交）+ 复选框（`.todo-check` / `role=checkbox`，Space/Enter 切换）+ 悬停删除按钮（`.todo-item-delete`）+ 双击文本进入编辑 + 未完成项拖拽手柄（`.todo-item-handle`）。
+- **交互流程**：
+  - **添加**：`addItem(listId, text)` → trim 后空 throw；`order = max(未完成项.order)+1`（不影响已完成项 order）；保存后自动重渲染 sidebar（计数）+ 内容区；`updatedAt` 顺带写。
+  - **勾选**：`toggleItem(listId, itemId)` → 翻转 `completed` + 写/清 `completedAt`；UI 切复选框 + 文本划线 + 沉底到「已完成」区。
+  - **删除**：`deleteItem(listId, itemId)`；直接删除，无二次确认（**待办项是低破坏操作**）；UI 立即移除。
+  - **内联编辑**：双击文本 → `contenteditable=true` 全选；Enter 保存、Esc 取消、blur 提交；空内容 = 视为删除；与原文相同 = noop；变更通过 `saveItems` 整存。
+  - **拖拽**（仅未完成项）：HTML5 dragstart/dragover/drop；目标项加 `todo-item-drop-above` 视觉提示；drop 后重写未完成项 `order`（已完成项不动）；dragend 清除状态。
+- **输入/输出**：文本 string / 勾选 toggle / 拖拽顺序变更 → 存储 + UI 重渲染。
+- **边界情况**：
+  - 完成后「已完成」区可点击「已完成 N」label 折叠/展开（`state.showCompleted`）；
+  - 跨清单汇总（`#todo/all` / `#todo/done`）下复选框仍可点；删除在汇总视图下也会同步影响原清单；
+  - 拖拽跨 list（`ul.dataset.listId` 不一致）拒绝；跨"已完成"边界拒绝。
+- **关联**：`utils/todo-storage.js`（addItem / toggleItem / deleteItem / saveItems / sortItems）、`manager/todo.js`（onAddItem / onToggleItem / onDeleteItem / startEditItem / onDragStart 等）、`manager/manager.css` `.todo-add-form` / `.todo-item` / `.todo-check` / `.todo-item-handle`。
+- **置信度：高**（addItem / toggleItem / deleteItem / sortItems 等有单测覆盖）。
+
+## 功能 25：待办 — 模板管理
+
+- **用户故事**：作为用户，我能把常用清单存为模板，反复复用。
+- **触发入口**：清单工作台顶部「存为模板」按钮；模板库视图下的「使用该模板」/「复制到当前清单」/ 卡片右上角删除按钮。
+- **交互流程**：
+  - **存为模板**：`saveAsTemplate(listId, templateName?)` → 弹出 `showEditModal` 输入模板名（默认取清单名）→ 仅快照 `items.map(content)` 文本列表（**不含** id / completed / 时间戳）→ 写入 `todo_templates`；空清单 → toast 拒绝。
+  - **使用模板**：`createListFromTemplate(templateId, listName?)` → 建新清单（同名模板）→ 按顺序 `addItem` 全部模板内容（未完成态）→ 跳到该清单工作台 + toast。
+  - **复制到当前清单**：`copyTemplateToList(templateId, listId)` → 按顺序追加到现有清单末尾；返回 `{added: N}`（过滤空字符串后实际添加数）；**需先在工作台视图**否则 toast 提示。
+  - **删除模板**：模板卡片右上角删除 → `showConfirmModal` 二次确认 → `deleteTemplate(id)`；toast。
+- **输入/输出**：模板名 / 模板 items 文本数组 → 存储；UI 卡片 / 视图切换。
+- **边界情况**：
+  - 空清单不能存为模板；
+  - 模板名 trim 后空 → 取清单名；
+  - 模板 items 为空 → 复制时 toast「模板为空，无可复制内容」，不写存储；
+  - 模板可被任何清单使用（与原清单生命周期解耦，删除原清单不影响模板）。
+- **关联**：`utils/todo-storage.js`（saveAsTemplate / createListFromTemplate / copyTemplateToList / deleteTemplate / loadTemplates）、`manager/todo.js`（onSaveAsTemplate / onUseTemplate / onCopyTemplateToCurrentList / onDeleteTemplate / makeTemplateCard）、`manager/modal.js`。
+- **置信度：高**（saveAsTemplate / createListFromTemplate / copyTemplateToList 等有单测覆盖）。
+
+## 功能 26：待办 — 四视图切换
+
+- **用户故事**：作为用户，我能从侧边栏在不同粒度间切换：单清单详情 / 全部清单汇总未完成 / 全部清单汇总已完成 / 模板库。
+- **触发入口**：侧边栏 `#todo-nav-all` / `#todo-nav-done` / `#todo-nav-templates` 三个按钮（`role=link`）；URL hash `#todo/all` / `#todo/done` / `#todo/templates` / `#todo` / `#todo/list/<id>`。
+- **交互流程**：
+  - **工作台（默认）**：当前清单的标题 + 进度文字「X / Y」+ 子标题「共 N 条 · 完成后自动沉底」+ 两个操作按钮（存为模板 / 删除清单）+ 输入框 + 未完成项列表（可拖拽）+ 已完成区（可折叠）+ 空态提示；自动 focus 输入框。
+  - **全部待办**：跨清单按清单分组（`todo-summary-group`），每组显示清单名 + 计数徽标 + 未完成项；空态「暂无未完成事项」；总条数显示在子标题。
+  - **已完成**：同上但显示已完成项 + 完成时间（如「今天 14:30」/「昨天 18:00」/「X 月 X 日」）；点复选框可恢复为未完成。
+  - **模板库**：卡片网格（`todo-template-grid` 响应式 `auto-fill minmax(220px, 1fr)`），每卡显示模板名 + 「N 个待办 · 更新于 X」+ 前 5 项预览 + hover 显示「使用该模板」「复制到当前清单」两按钮 + 右上角删除按钮；空态「还没有模板」。
+  - URL 改变（hashchange）→ `applyRouteFromHash`（manager.js）+ `handleHashChange`（todo.js）双层路由：manager.js 负责主视图切换，todo.js 负责待办内视图。
+- **输入/输出**：用户点击 / URL 变化 → 视图状态 + 重渲染。
+- **边界情况**：
+  - 全部待办 / 已完成汇总：含 0 项的清单不出现在分组中；
+  - 模板库：无模板时显示空态引导；
+  - 工作台清单不存在（hash 里的 id 已失效）→ 自动 fallback 到第一个清单。
+- **关联**：`manager/todo.js`（renderListView / renderAllView / renderDoneView / renderTemplatesView / handleHashChange / switchTo / writeHash）、`manager/manager.css` `.todo-view-*` / `.todo-summary-*` / `.todo-template-*`。
+- **置信度：高**。
+
+## 功能 27：待办 — 首启惰性创建「今日待办」
+
+- **用户故事**：作为用户，我首次打开待办 tab 时不用手动建第一个清单，系统帮我创建好。
+- **触发入口**：`manager/todo.js` `init()` 首调 `getOrCreateTodayList()`。
+- **交互流程**：
+  1. 读 `todo_today_list_id`；若 id 存在且对应清单仍在 `todo_lists` → 直接返回该清单；
+  2. 否则 `createList('今日待办')` → 写 `todo_today_list_id = list.id` → 返回；
+  3. 若原 id 对应的清单被删了（典型：用户主动删）→ 先清 `todo_today_list_id` 标记，再走创建路径（幂等恢复）。
+- **输入/输出**：无用户输入；输出为 TodoList 对象。
+- **边界情况**：
+  - 连续调用不会重复创建（id 已写入）；
+  - 清单被删后再次访问会重建（保持单实例的"今日待办"持续可用）；
+  - 创建失败（storage 异常）→ todo.js 静默 catch，不阻塞 init（用户可手动 `+ 新建清单`）。
+- **关联**：`utils/todo-storage.js`（`getOrCreateTodayList`）、`manager/todo.js`（init）。
+- **置信度：高**（幂等与失效重建有单测覆盖）。
