@@ -2,7 +2,7 @@
 
 > 对照基准：
 > - 旧文档：`docs/archive/original-PRD.md`（PRD v0.5，2026-08-10）、`docs/archive/legacy-notes.md`（README 版本历史 v0.5–v0.7.2 等）
-> - 当前代码：v0.8.0 工作区快照，2026-08-13（`_facts.md` 同源）
+> - 当前代码：v0.8.1 工作区快照，2026-08-14（`_facts.md` 同源）
 > - 用途：只做差异对照；本报告不改动 docs/01~06。
 > 证据格式：`文件:位置` 或 grep 结论。
 

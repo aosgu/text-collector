@@ -100,13 +100,13 @@ body {
   flex-wrap: wrap;
 }
 
-/* 顶部的轻量计数（放在品牌名旁边，避免和页面大标题重复） */
+/* 顶部的轻量计数（字体与品牌副标题 manager 保持一致） */
 .toolbar-count {
-  font-family: var(--mono);
+  font-family: var(--sans);
   font-size: 11.5px;
   color: var(--text-dim);
   padding: 0 10px 0 4px;
-  letter-spacing: 0.02em;
+  letter-spacing: 0;
 }
 
 /* 品牌 */
@@ -300,7 +300,8 @@ body {
   display: block;
   padding: 6px 8px;
   border-radius: var(--radius-xs);
-  font-family: var(--serif);
+  /* 与品牌副标题 manager 使用同一无衬线字体栈 */
+  font-family: var(--sans);
   font-size: 14.5px;
   color: var(--text);
   text-decoration: none;
