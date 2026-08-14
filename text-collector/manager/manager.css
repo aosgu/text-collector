@@ -110,9 +110,9 @@ body {
 }
 
 /* 品牌：图标 + 「采集 / 待办」
-   - 两者字号、字体、字重一致（serif 18px 600，色 var(--text)）
+   - 两者字号、字体、字重一致（serif 18px 600）
    - 斜杠分隔符降低视觉权重
-   - 「待办」是可点击的文字入口：点击切到 #todo 视图
+   - 「采集」与「待办」均为可点击的入口链接：点击分别切到 #collect / #todo
    - 整组无激活态、无箭头——只是入口文字 */
 .brand {
   display: flex;
@@ -130,15 +130,39 @@ body {
   font-size: 18px;
   font-weight: 600;
   letter-spacing: -0.01em;
-  color: var(--text);
   line-height: 1;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0;
 }
 .brand-sep {
   color: var(--text-dim);
   font-weight: 400;
   margin: 0 3px;
+  font-family: var(--serif);
+  font-size: 18px;
 }
-/* 「待办」入口：与「采集」同字体同大小同字重，仅颜色略弱以区分主次 */
+/* 「采集」入口：默认深色（视觉主项），hover 略深 */
+.brand-collect {
+  font-family: var(--serif);
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text);
+  text-decoration: none;
+  cursor: pointer;
+  letter-spacing: -0.01em;
+  transition: color .15s ease;
+}
+.brand-collect:hover {
+  color: #000;
+  text-decoration: none;
+}
+.brand-collect:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 3px;
+  border-radius: 3px;
+}
+/* 「待办」入口：颜色略弱以区分主次；hover 变深 */
 .brand-sub {
   font-family: var(--serif);
   font-size: 18px;
@@ -146,8 +170,8 @@ body {
   color: var(--text-muted);
   text-decoration: none;
   cursor: pointer;
-  transition: color .15s ease;
   letter-spacing: -0.01em;
+  transition: color .15s ease;
 }
 .brand-sub:hover {
   color: var(--text);

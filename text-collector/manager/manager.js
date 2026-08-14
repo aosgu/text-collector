@@ -339,6 +339,26 @@ function applyRouteFromHash() {
 
 window.addEventListener('hashchange', applyRouteFromHash);
 
+// 顶部 brand 入口链接（采集 / 待办）兜底：
+// 当 hash 已经等于目标值时，hashchange 不会触发，链接点击"无效"。
+// 这里拦截 click 强制应用当前路由，确保从 #todo 点"采集"一定能切到 #collect 视图。
+function setupBrandLinks() {
+  const $collectLink = document.getElementById('brand-collect-link');
+  const $todoLink = document.getElementById('brand-todo-link');
+  if ($collectLink) {
+    $collectLink.addEventListener('click', (e) => {
+      // 已经是 #collect / 空 hash 时也强制刷新一次视图（避免 hashchange 不触发）
+      applyRouteFromHash();
+      // 如果当前就在 #collect，浏览器不会改 hash，链接也不会滚动；保持原状即可
+    });
+  }
+  if ($todoLink) {
+    $todoLink.addEventListener('click', () => {
+      applyRouteFromHash();
+    });
+  }
+}
+
 // 启动：任何一步抛错都展示错误态，避免白屏
 init().catch(err => {
   console.error('[text-collector] init failed:', err);
@@ -346,6 +366,7 @@ init().catch(err => {
 }).then(() => {
   // 默认进采集 tab（URL hash 不强制写入，保留 history 干净；
   // applyRouteFromHash 自带默认逻辑：hash 为空视为 #collect）
+  setupBrandLinks();
   applyRouteFromHash();
   // 启动待办模块
   if (window.TodoApp && typeof window.TodoApp.init === 'function') {
