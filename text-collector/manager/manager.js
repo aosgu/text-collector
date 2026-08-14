@@ -300,8 +300,78 @@ function setupListeners() {
   $btnLoadMore.addEventListener('click', () => loadMore(listBridge));
 }
 
-// ── 启动：任何一步抛错都展示错误态，避免白屏 ──
+// ── 待办 Tab 桥接（v1.0.0） ──
+// 把管理页的 showToast / showConfirmModal / showEditModal 暴露给 todo.js 使用，
+// 避免 todo.js 直接依赖 manager.js 的内部变量 / 重复实现。
+window.__managerBridge = {
+  showToast: showToast,
+  showConfirm: showConfirmModal,
+  showEdit: showEditModal,
+};
+
+// ── 采集 tab 下的 toolbar 额外按钮（导出 / 清空）：仅采集 tab 可见 ──
+const $collectExtras = document.getElementById('collect-toolbar-extras');
+function setCollectExtrasVisible(visible) {
+  if (!$collectExtras) return;
+  $collectExtras.classList.toggle('hidden', !visible);
+}
+
+// ── 顶 Tab 路由：#collect（默认）/ #todo ──
+function applyRouteFromHash() {
+  const h = (location.hash || '').replace(/^#/, '');
+  const isTodo = h.indexOf('todo') === 0;
+  const viewCollect = document.getElementById('view-collect');
+  const viewTodo = document.getElementById('view-todo');
+  const collectToggle = document.getElementById('collect-toggle');
+  const toolbarCount = document.getElementById('toolbar-count');
+
+  if (viewCollect) viewCollect.classList.toggle('hidden', isTodo);
+  if (viewTodo) viewTodo.classList.toggle('hidden', !isTodo);
+  if (collectToggle) {
+    // 待办 tab 下置灰，避免误操作影响采集状态
+    collectToggle.classList.toggle('is-disabled', isTodo);
+    collectToggle.setAttribute('aria-disabled', isTodo ? 'true' : 'false');
+  }
+  // 采集数据条数仅在采集 tab 下展示；待办 tab 下的总览在侧边栏的徽标
+  if (toolbarCount) toolbarCount.classList.toggle('hidden', isTodo);
+  setCollectExtrasVisible(!isTodo);
+}
+
+window.addEventListener('hashchange', applyRouteFromHash);
+
+// 顶部 brand 入口链接（采集 / 待办）兜底：
+// 当 hash 已经等于目标值时，hashchange 不会触发，链接点击"无效"。
+// 这里拦截 click 强制应用当前路由，确保从 #todo 点"采集"一定能切到 #collect 视图。
+function setupBrandLinks() {
+  const $collectLink = document.getElementById('brand-collect-link');
+  const $todoLink = document.getElementById('brand-todo-link');
+  if ($collectLink) {
+    $collectLink.addEventListener('click', (e) => {
+      // 已经是 #collect / 空 hash 时也强制刷新一次视图（避免 hashchange 不触发）
+      applyRouteFromHash();
+      // 如果当前就在 #collect，浏览器不会改 hash，链接也不会滚动；保持原状即可
+    });
+  }
+  if ($todoLink) {
+    $todoLink.addEventListener('click', () => {
+      applyRouteFromHash();
+    });
+  }
+}
+
+// 启动：任何一步抛错都展示错误态，避免白屏
 init().catch(err => {
   console.error('[text-collector] init failed:', err);
   renderLoadError();
+}).then(() => {
+  // 默认进采集 tab（URL hash 不强制写入，保留 history 干净；
+  // applyRouteFromHash 自带默认逻辑：hash 为空视为 #collect）
+  setupBrandLinks();
+  applyRouteFromHash();
+  // 启动待办模块
+  if (window.TodoApp && typeof window.TodoApp.init === 'function') {
+    window.TodoApp.init().catch(err => {
+      console.error('[text-collector] todo init failed:', err);
+    });
+  }
 });

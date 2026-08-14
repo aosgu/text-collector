@@ -1,6 +1,6 @@
 # 技术架构 — 网页文字采集器
 
-> 依据：`docs/_facts.md` 与当前代码（v0.8.1，2026-08-14）。禁止参考 `docs/archive/`。
+> 依据：`docs/_facts.md` 与当前代码（v1.0.0，2026-08-15）。禁止参考 `docs/archive/`。
 > 所有结论均可回溯到具体文件；推断处标注。
 
 ---
@@ -35,19 +35,25 @@
 │  ┌──────────────────────────┴──────────────────────────────────┐  │
 │  │  共享存储层  chrome.storage.local                           │  │
 │  │  snip_<uuid> · snippets_order · collectEnabled ·            │  │
-│  │  schemaVersion · orphanScanV1                               │  │
+│  │  schemaVersion · orphanScanV1 ·                            │  │
+│  │  todo_lists · todo_items_<id> · todo_templates ·            │  │
+│  │  todo_today_list_id                                        │  │
 │  └──────────┬───────────────────────────────┬──────────────────┘  │
 │             │ 读写（无中转）                  │ 读写 + 订阅          │
 │  ┌──────────┴───────────────┐   ┌───────────┴───────────────────┐ │
 │  │ Content Script           │   │ 管理页 manager.html           │ │
-│  │ （注入所有页面）           │   │ （扩展页面）                    │ │
-│  │ content/content.js       │   │ manager.js（编排/状态）        │ │
-│  │ content/content.css      │   │ render.js（列表/卡片/删除撤销） │ │
-│  │ 依赖 utils/storage.js    │   │ toast.js（通知）               │ │
-│  │ （manifest 先行注入）      │   │ modal.js（确认/编辑弹窗）       │ │
-│  └──────────────────────────┘   │ export.js（TXT/JSON 导出）     │ │
+│  │ （注入所有页面）           │   │ （扩展页面；含 #collect 采集   │ │
+│  │ content/content.js       │   │  tab 与 #todo 待办 tab）        │ │
+│  │ content/content.css      │   │ manager.js（编排/状态/hash路由）│ │
+│  │ 依赖 utils/storage.js    │   │ render.js（列表/卡片/删除撤销） │ │
+│  │ （manifest 先行注入）      │   │ toast.js（通知）               │ │
+│  └──────────────────────────┘   │ modal.js（确认/编辑弹窗）       │ │
+│                                 │ export.js（TXT/JSON 导出）     │ │
 │                                 │ nav.js（网站导航配置）         │ │
+│                                 │ todo.js（待办 tab 入口/视图）   │ │
+│                                 │ todo.css（待办模块样式）       │ │
 │                                 │ 依赖 utils/storage.js          │ │
+│                                 │ 依赖 utils/todo-storage.js     │ │
 │                                 └───────────────────────────────┘ │
 └───────────────────────────────────────────────────────────────────┘
 ```
@@ -88,7 +94,10 @@ flowchart TB
 | 通知 | `text-collector/manager/toast.js` | 单实例 toast + SVG 图标常量（自包含） | 管理页 |
 | 导出 | `text-collector/manager/export.js` | TXT/JSON 生成与下载 | 管理页 |
 | 网站导航 | `text-collector/manager/nav.js` + `text-collector/config/nav.json` | 读取包内导航配置、校验规范化、渲染 hover 分栏面板（v0.8.0；不读写 storage，不依赖 manager.js 状态） | 管理页 |
-| 管理页样式 | `text-collector/manager/manager.css` | 主题变量、卡片/菜单/弹窗样式、响应式 | 管理页 |
+| 待办数据层（v1.0.0） | `text-collector/utils/todo-storage.js` | 全部待办数据读写封装（清单 / 事项 / 模板）；错误 throw；与 `utils/storage.js` 互不依赖 | 管理页（被 `manager/todo.js` 调用） |
+| 待办 tab 入口（v1.0.0） | `text-collector/manager/todo.js` | 待办 tab 内部：四视图路由、render、事件、拖拽；通过 `window.__managerBridge` 复用采集模块的 toast/confirm/edit | 管理页 |
+| 待办样式（v1.0.0） | `text-collector/manager/todo.css` | 待办模块样式：侧边栏、4 视图、拖拽视觉、响应式；命名空间 `todo-` 前缀避免与采集模块冲突；**复用** `manager.css` 的 `:root` CSS 变量 | 管理页 |
+| 管理页样式 | `text-collector/manager/manager.css` | 主题变量、卡片/菜单/弹窗样式、响应式、品牌 brand 区域 | 管理页 |
 | 测试 | `text-collector/tests/*` + `tests/helpers/load-source.js` | 纯函数单元测试（语法提取） | Node（vitest） |
 | 图标工具 | `design/`（make-icons.js / icon-spec.js / preview.js / build-icon.js） | 参数化生成 `icons/icon16/48/128.png` | Node（开发期） |
 
@@ -104,8 +113,10 @@ utils/storage.js → content/content.js
 
 **管理页上下文**（`manager/manager.html` `<script>` 顺序）：
 ```
-utils/storage.js → toast.js → nav.js → modal.js → render.js → export.js → manager.js
-（后者引用前者的全局函数/常量；nav.js 为自初始化的独立模块，不被其他模块引用，也不引用它们）
+utils/storage.js → utils/todo-storage.js → toast.js → nav.js → modal.js →
+render.js → export.js → todo.js → manager.js
+（后者引用前者的全局函数/常量；nav.js 为自初始化的独立模块，不被其他模块引用，也不引用它们；
+todo.js 依赖 manager.js 暴露的 `window.__managerBridge` 间接使用 toast/confirm/edit 桥接）
 ```
 
 **Service Worker**：单文件，仅依赖 `chrome.*` API，不引用任何项目内模块（`service-worker.js` 头部注释：「采集逻辑在 content script 里直接读写 storage，本文件不做中转」）。
@@ -121,6 +132,7 @@ utils/storage.js → toast.js → nav.js → modal.js → render.js → export.j
 | `manager/nav.js` | 无模块依赖（仅 DOM + `chrome.runtime.getURL` + `fetch` 包内配置） | — |
 | `manager/toast.js` | 无模块依赖（仅 DOM） | — |
 | `manager/modal.js` | 无模块依赖（仅 DOM） | — |
+| `manager/todo.js`（v1.0.0） | `utils/todo-storage.js`：`createList` / `renameList` / `deleteList` / `addItem` / `toggleItem` / `deleteItem` / `saveItems` / `getLists` / `getItems` / `loadTemplates` / `saveAsTemplate` / `createListFromTemplate` / `copyTemplateToList` / `deleteTemplate` / `getOrCreateTodayList` / `normalizeListName` / `sortItems` / `getOrCreate` 等全部；`window.__managerBridge`：`showToast` / `showConfirmModal` / `showEditModal` | 全局函数（与 manager.js 共享同一份 storage.js 上下文） |
 | `tests/*.test.js` | 源码文件（`readSource` 读文本 + 语法提取） | Node fs / new Function |
 | `design/make-icons.js` | sharp | npm 依赖 |
 
@@ -153,7 +165,7 @@ utils/storage.js → toast.js → nav.js → modal.js → render.js → export.j
 ```
 cd text-collector
 npm install        # 安装 vitest（devDependency）
-npm test           # vitest run（Node 环境，64 用例：storage 16 + content 39 + nav 9）
+npm test           # vitest run（Node 环境，100 用例：storage 16 + content 39 + nav 9 + todo-storage 36）
 npm run test:watch # 监听模式
 ```
 

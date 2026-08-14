@@ -1,6 +1,6 @@
 # 网页文字采集器（text-collector）
 
-个人自用的 Chrome 扩展：在任意网页**选中文字即自动保存**，点击工具栏图标打开管理页，进行查看、复制、删除（可撤销）、收藏、编辑与导出。
+个人自用的 Chrome 扩展：在任意网页**选中文字即自动保存**，点击工具栏图标打开管理页（采集 / 待办双 Tab），采集可查看、复制、删除（可撤销）、收藏、编辑与导出，待办可建清单、勾选、模板复用。
 
 > 纯个人备忘 · 数据完全本地 · 零外部网络请求 · 不对外发布
 
@@ -14,6 +14,7 @@
 - **导出备份**：TXT（UTF-8 BOM）/ JSON，按当前页签过滤
 - **采集开关**：管理页开关或快捷键 `Ctrl+Shift+S`，关闭时工具栏图标显示灰色 OFF
 - **网站导航**：管理页头部导航图标，hover 展开网站快捷方式分栏面板（新标签页打开），站点列表由包内 `config/nav.json` 配置
+- **待办清单**（v1.0.0 起）：管理页顶 Tab 切换到「待办」即可使用：多清单 + 待办项 + 模板库（首启惰性创建「今日待办」），数据与采集完全隔离（`todo_` 前缀存储键）
 - **键盘可达**：Tab 导航、焦点陷阱、aria 语义
 
 ## 文档地图
@@ -85,6 +86,20 @@
 - 快捷键 `Ctrl+Shift+S`：浏览器内切换（非全局快捷键，需 Chrome 前台生效）
 - 关闭后工具栏图标显示灰色 OFF
 
+### 待办清单（v1.0.0 起）
+
+- 管理页顶部「**采集 / 待办**」两段文字均为可点击入口；点「待办」切到待办 tab
+- 默认 tab 仍是采集；待办 tab 不会自动开启/影响采集
+- 待办 tab 内：
+  - 左侧栏：清单列表 + 「全部待办 / 已完成 / 模板库」三个视图入口 + 「+ 新建清单」按钮
+  - 工作台（清单详情）：输入框 + 待办项（未完成在上，已完成自动沉底并可折叠）
+  - 待办项支持双击编辑、勾选完成、悬停删除；未完成项可拖拽手柄排序
+  - 删除清单的入口**仅**在工作台顶部「删除清单」按钮（避免侧边栏误触）
+  - 模板：把任意清单「存为模板」；模板可一键「使用该模板」（建新清单）或「复制到当前清单」
+  - 跨清单汇总：点「全部待办 / 已完成」按清单分组查看
+- 首启惰性创建「今日待办」清单（同名仅首次创建）
+- 数据完全独立于采集（`todo_lists` / `todo_items_<id>` / `todo_templates` / `todo_today_list_id`，与 `snip_*` 不互通）
+
 ## 数据与隐私
 
 - 所有数据仅存于浏览器本地 `chrome.storage.local`（扩展申请了 `unlimitedStorage` 权限）
@@ -120,25 +135,28 @@ text-collector/
 │   ├── content.js         # 内容脚本：选区监听 + 准入规则 + Shadow DOM toast
 │   └── content.css        # toast 宿主钉死样式（与内联样式双保险）
 ├── manager/
-│   ├── manager.html       # 管理页
-│   ├── manager.js         # 入口 / 编排 / 状态（listBridge）
+│   ├── manager.html       # 管理页（含 #collect 采集 tab 与 #todo 待办 tab）
+│   ├── manager.js         # 入口 / 编排 / 状态（listBridge）/ hash 路由
 │   ├── render.js          # 列表渲染 / 卡片 / 删除撤销
 │   ├── nav.js             # 网站导航（hover 面板 / 配置读取）
 │   ├── modal.js           # 确认 / 编辑弹窗
 │   ├── toast.js           # 单实例 toast
 │   ├── export.js          # TXT / JSON 导出
-│   └── manager.css        # 管理页样式
+│   ├── todo.js            # 待办 tab 入口 / 视图路由 / 事件 / 拖拽
+│   ├── todo.css           # 待办模块样式（侧边栏 / 4 视图 / 拖拽视觉）
+│   └── manager.css        # 管理页样式（含 :root 变量，被 todo.css 复用）
 ├── config/
 │   └── nav.json           # 网站导航配置（后台文件配置，无前端编辑）
 ├── background/
-│   └── service-worker.js  # 安装初始化 / 图标点击 / 快捷键 / badge
+│   └── service-worker.js  # 安装初始化 / 图标点击 → manager.html / 快捷键 / badge
 ├── utils/
-│   └── storage.js         # 分片存储工具 + CONFIG 常量
+│   ├── storage.js         # 采集记录分片存储 + CONFIG 常量
+│   └── todo-storage.js    # 待办数据层（todo_ 前缀键，与 snip_* 隔离）
 ├── icons/                 # 扩展图标（生成产物）
 └── tests/                 # vitest 单元测试（Node 环境）
 ```
 
-- 测试：`cd text-collector && npm install && npm test`（vitest，64 用例：storage 16 + content 39 + nav 9）
+- 测试：`cd text-collector && npm install && npm test`（vitest，100 用例：storage 16 + content 39 + nav 9 + todo-storage 36）
 - 图标再生成：`cd design && npm install && npm run icons`（sharp 参数化生成）
 - 详细技术说明见上方「文档地图」
 
@@ -155,4 +173,4 @@ text-collector/
 
 [MIT](../LICENSE)
 
-当前版本 **v0.8.1**。变更日志见 [`docs/CHANGELOG.md`](../docs/CHANGELOG.md)；v0.7.2 及更早的版本历史见 [`docs/archive/legacy-notes.md`](../docs/archive/legacy-notes.md)（历史文档，仅供追溯）。
+当前版本 **v1.0.0**。变更日志见 [`docs/CHANGELOG.md`](../docs/CHANGELOG.md)；v0.7.2 及更早的版本历史见 [`docs/archive/legacy-notes.md`](../docs/archive/legacy-notes.md)（历史文档，仅供追溯）。

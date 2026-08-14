@@ -100,7 +100,7 @@ body {
   flex-wrap: wrap;
 }
 
-/* 顶部的轻量计数（字体与品牌副标题 manager 保持一致） */
+/* 顶部的轻量计数（仅采集 tab 显示） */
 .toolbar-count {
   font-family: var(--sans);
   font-size: 11.5px;
@@ -109,7 +109,18 @@ body {
   letter-spacing: 0;
 }
 
-/* 品牌 */
+/* 采集 tab 下的 toolbar 额外按钮（导出 / 清空）：水平并排 */
+#collect-toolbar-extras {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 品牌：图标 + 「采集 / 待办」
+   - 两者字号、字体、字重一致（serif 18px 600）
+   - 斜杠分隔符降低视觉权重
+   - 「采集」与「待办」均为可点击的入口链接：点击分别切到 #collect / #todo
+   - 整组无激活态、无箭头——只是入口文字 */
 .brand {
   display: flex;
   align-items: center;
@@ -126,20 +137,58 @@ body {
   font-size: 18px;
   font-weight: 600;
   letter-spacing: -0.01em;
-  color: var(--text);
   line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  white-space: nowrap;
 }
 .brand-sep {
   color: var(--text-dim);
   font-weight: 400;
   margin: 0 3px;
+  font-family: var(--serif);
+  font-size: 18px;
 }
+/* 「采集」入口：默认深色（视觉主项），hover 略深 */
+.brand-collect {
+  font-family: var(--serif);
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text);
+  text-decoration: none;
+  cursor: pointer;
+  letter-spacing: -0.01em;
+  transition: color .15s ease;
+}
+.brand-collect:hover {
+  color: #000;
+  text-decoration: none;
+}
+.brand-collect:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 3px;
+  border-radius: 3px;
+}
+/* 「待办」入口：颜色略弱以区分主次；hover 变深 */
 .brand-sub {
-  font-family: var(--sans);
-  font-size: 12.5px;
+  font-family: var(--serif);
+  font-size: 18px;
+  font-weight: 600;
   color: var(--text-muted);
-  font-weight: 400;
-  letter-spacing: 0;
+  text-decoration: none;
+  cursor: pointer;
+  letter-spacing: -0.01em;
+  transition: color .15s ease;
+}
+.brand-sub:hover {
+  color: var(--text);
+  text-decoration: none;
+}
+.brand-sub:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 3px;
+  border-radius: 3px;
 }
 
 /* ── 按钮 ── */
@@ -830,7 +879,8 @@ body {
     justify-content: center;
   }
   .brand { margin-right: 4px; }
-  .brand-sub { display: none; }
+  .brand-sub { font-size: 15px; }  /* 窄屏稍小，避免溢出 */
+  .toolbar-count { display: none; }
   /* 窄屏：面板改为顶部全宽覆盖，栏目换行平铺 */
   .nav-panel {
     position: fixed;
