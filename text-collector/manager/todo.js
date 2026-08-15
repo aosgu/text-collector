@@ -1004,12 +1004,12 @@
       if (!nextListId && state.lists.length > 0) nextListId = state.lists[0].id;
     }
 
-    if (state.currentView !== nextView || state.currentListId !== nextListId) {
-      state.currentView = nextView;
-      state.currentListId = nextListId;
-      renderSidebar();
-      renderContent();
-    }
+    // 首次以 #todo 打开、同一 hash 重复点击以及普通 hashchange 都必须渲染。
+    // 不能只在状态变化时渲染，否则已有相同初始状态时内容区会保持空白。
+    state.currentView = nextView;
+    state.currentListId = nextListId;
+    renderSidebar();
+    renderContent();
   }
 
   // ── 数据加载 ──
@@ -1176,7 +1176,8 @@
       state.storageListenerBound = true;
     }
 
-    // 加载数据 → 渲染 → 应用 hash
+    // 数据加载完成后解析当前 hash，并无条件渲染当前待办视图。
+    // 这保证直接打开 manager.html#todo 时不会依赖后续侧边栏点击才出现内容。
     await refreshAll();
     state.isReady = true;
     handleHashChange();

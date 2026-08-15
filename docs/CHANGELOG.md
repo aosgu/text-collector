@@ -25,6 +25,10 @@
   - `resizeAddItemInput(input)` 复用 canvas 并按当前计算字体测量输入文字；
   - 在每次 `input` 事件时，只有文字所需宽度超过 480px 才同步提高 inline `width` 与 `flex-basis`；
   - 按 Enter 提交后清空输入值并重新计算，输入框回到 480px 基准。
+- **`#todo` 首屏空白修复**（`manager/manager.js`、`manager/todo.js`）
+  - 主 Tab 路由进入 `#todo` 时调用 `TodoApp.handleHashChange()`；待办模块未就绪时安全忽略，初始化完成后自行重试；
+  - `handleHashChange()` 在路由解析后始终渲染侧边栏和内容区，不再只在视图状态变化时渲染；
+  - 因此直接打开 `manager.html#todo`、重复点击同一待办入口或普通 hash 变化都会立即显示当前清单工作台，无需先点击侧边栏。
 
 ### 验证
 
