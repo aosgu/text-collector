@@ -77,6 +77,25 @@
 
   function $(id) { return document.getElementById(id); }
 
+  /**
+   * 待办输入框的默认弹性基准为 480px；只有输入内容超过该宽度时才扩大基准。
+   * flex-shrink 保持开启，因此窄窗口下仍可收缩，窗口重新变宽时则最多恢复至内容所需宽度。
+   */
+  function resizeAddItemInput(input) {
+    if (!input) return;
+    const style = window.getComputedStyle(input);
+    const canvas = resizeAddItemInput.canvas ||
+      (resizeAddItemInput.canvas = document.createElement('canvas'));
+    const ctx = canvas.getContext('2d');
+    ctx.font = [style.fontStyle, style.fontVariant, style.fontWeight,
+      style.fontSize, style.fontFamily].join(' ');
+    const value = input.value || input.placeholder || '';
+    const contentWidth = Math.ceil(ctx.measureText(value).width);
+    const padding = (parseFloat(style.paddingLeft) || 0) +
+      (parseFloat(style.paddingRight) || 0);
+    input.style.flexBasis = Math.max(480, contentWidth + padding + 2) + 'px';
+  }
+
   /** bridge：访问 manager.js 暴露的 toast/confirm/edit；不存在时降级为 noop */
   function bridge() {
     return window.__managerBridge || {
@@ -1066,6 +1085,7 @@
         if (!input) return;
         const text = input.value;
         input.value = '';
+        resizeAddItemInput(input);
         // 同步按钮 disabled
         const btn = form.querySelector('button');
         if (btn) btn.disabled = true;
@@ -1073,6 +1093,7 @@
       });
       contentInner.addEventListener('input', (e) => {
         if (e.target.matches('.todo-add-form input')) {
+          resizeAddItemInput(e.target);
           const btn = e.target.closest('.todo-add-form').querySelector('button');
           if (btn) btn.disabled = !e.target.value.trim();
         }

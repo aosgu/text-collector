@@ -5,4 +5,4 @@
 - 纯个人备忘 · 数据完全本地 · 零外部网络请求
 - 扩展代码与完整 README：[`text-collector/`](text-collector/README.md)
 - 文档：`docs/`（[`_facts.md`](docs/_facts.md) 为当前事实源，[`CHANGELOG.md`](docs/CHANGELOG.md) 为变更日志，[`archive/`](docs/archive/) 为历史归档，仅供追溯）
-- 当前版本：**v1.0.0**（同页 Tab 切换的待办清单）
+- 当前版本：**v1.0.1**（待办侧边栏与添加事项输入框的响应式尺寸微调）

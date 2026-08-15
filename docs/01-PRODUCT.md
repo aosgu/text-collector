@@ -1,6 +1,6 @@
 # 产品文档 — 网页文字采集器（Chrome 扩展）
 
-> 依据：`docs/_facts.md`（代码事实清单）及当前代码快照（v1.0.0，2026-08-15）。
+> 依据：`docs/_facts.md`（代码事实清单）及当前代码快照（v1.0.1，2026-08-15）。
 > 本文件只描述代码中可证明存在的产品事实，不参考 `docs/archive/`。
 > 置信度：**高** = 代码直接证明；**中** = 由代码/注释推断；**低** = 推测。
 
@@ -57,14 +57,16 @@
 | 17 | 打开/聚焦管理页 | `background/service-worker.js` | 图标点击：已开则聚焦，未开则新开 |
 | 18 | 键盘可达与无障碍 | `render.js` / `modal.js` / `manager.js` | Tab 导航、焦点陷阱、aria 属性 |
 | 19 | 响应式与减弱动效 | `manager/manager.css` | ≤640px 布局调整、`prefers-reduced-motion` |
-| 20 | 单元测试 | `tests/`（vitest，64 用例） | 纯函数在 Node 环境验证 |
+| 20 | 单元测试 | `tests/`（vitest，100 用例） | 纯函数在 Node 环境验证 |
 | 21 | 网站导航（v0.8.0 新增） | `manager/nav.js` + `config/nav.json`（头部 `#btn-nav`） | hover 展开分栏快捷方式面板，新标签页打开；配置文件驱动，无效配置时图标隐藏 |
 | 22 | 主视图顶 Tab 切换（v1.0.0） | `manager.html` 顶部 `.brand-name` 内 `<a href="#collect">` / `<a href="#todo">` | URL hash 路由：`#collect`（默认）= 采集 tab，`#todo[/...]` = 待办 tab；点图标默认进采集 |
 | 23 | 待办：清单 CRUD（v1.0.0） | `manager/todo.js` 侧边栏 + `utils/todo-storage.js` | 创建（自动 order）/ 重命名（双击 / F2 / Enter）/ 删除（**仅**工作台顶部按钮，二次确认） |
-| 24 | 待办：事项 CRUD（v1.0.0） | `manager/todo.js` 工作台 | 添加（输入框 Enter）/ 勾选（点击或键盘 Space/Enter）/ 删除（hover 按钮）/ 内联编辑（双击 / Enter 保存 / Esc 取消 / 空内容=删除）/ 未完成项拖拽排序 |
+| 24 | 待办：事项 CRUD（v1.0.0，v1.0.1 微调） | `manager/todo.js` + `manager/todo.css` 工作台 | 添加（输入框 Enter；以 480px 为基准、窄窗口可收缩、超长文字按内容扩展）/ 勾选（点击或键盘 Space/Enter）/ 删除（hover 按钮）/ 内联编辑（双击 / Enter 保存 / Esc 取消 / 空内容=删除）/ 未完成项拖拽排序 |
 | 25 | 待办：模板管理（v1.0.0） | `manager/todo.js` 模板库视图 | 「存为模板」（从清单导 content 文本列表）/「使用该模板」（建新清单）/「复制到当前清单」/ 删除（hover 按钮） |
 | 26 | 待办：四视图切换（v1.0.0） | `manager/todo.js` 侧边栏导航 + URL hash | 工作台（清单详情）/ 全部待办（按清单分组）/ 已完成（按清单分组 + 完成时间）/ 模板库 |
 | 27 | 待办：首启惰性创建「今日待办」（v1.0.0） | `utils/todo-storage.js` `getOrCreateTodayList` | 首次进入待办 tab 时创建并写 `todo_today_list_id`；后续幂等，删后自动重建 |
+
+> **v1.0.1 界面微调**：待办左侧边栏由 240px 调整为 **300px**，以增加清单区可读空间；工作台添加事项输入框保持 **480px** 的稳定弹性基准，容器不足时可收缩，容器宽裕时不无意义拉伸，只有输入内容超过基准时才按文字宽度扩展。此版本不改变任何存储、路由、权限或待办操作语义。
 
 ## 非目标（明确不做什么）
 

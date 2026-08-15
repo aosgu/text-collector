@@ -1,7 +1,8 @@
 # 代码事实清单 — text-collector
 
-> 生成方式：对当前代码快照（v1.0.0，2026-08-15）的源码逐文件扫描，仅记录代码中可证明存在的内容。
+> 生成方式：对当前代码快照（v1.0.1，2026-08-15）的源码逐文件扫描，仅记录代码中可证明存在的内容。
 > 修订记录：
+> - 2026-08-15（v1.0.1）— 待办工作台布局微调：`manager/todo.css` 将 `.todo-sidebar` 桌面宽度调整为 300px；`.todo-add-form input` 采用 `flex: 0 1 480px`，在窄容器中可收缩、在可用空间充足时不因剩余空间继续拉伸。`manager/todo.js` 新增 `resizeAddItemInput`，输入和提交清空后按文本测量结果更新 `flex-basis`，仅当内容所需宽度超过 480px 时扩展。
 > - 2026-08-12 — 根据用户确认，将「导入功能」状态由「待确认（无证据）」更正为「已删除」（见 §4.3）。
 > - 2026-08-13（v0.8.0）— 新增网站导航模块（`manager/nav.js` + `config/nav.json`）相关事实：§2 模块表、§3.1 操作表、§5.1/5.3 接口、§6.2 内存状态、§8.5 配置文件；并记录导航面板分栏与 tooltip 的样式修复。
 > - 2026-08-14（v0.8.1）— 顶部记录数与导航快捷方式名称统一使用品牌副标题 `manager` 的无衬线字体栈（§9）。
@@ -58,9 +59,9 @@
 | 管理页样式 | `manager/manager.css` | 全部视觉样式 + `:root` CSS 变量（主题色板） | manager.html `<link>` 引入 |
 | 单元测试 | `tests/storage.test.js`、`tests/content.test.js`、`tests/nav.test.js`、`tests/todo-storage.test.js`、`tests/helpers/load-source.js` | 用语法提取纯函数（`extractFunction`/`extractObjectLiteral`）在 Node 环境运行 vitest；storage 16 + content 39 + nav 9 + todo-storage 36 = **100** 个用例 | `npm test`（vitest，见 `package.json`/`vitest.config.js`，environment: node） |
 | 图标生成工具（开发期，非运行时） | `design/`（`make-icons.js`、`icon-spec.js`、`preview.js`、`build-icon.js` 等） | 参数化生成 `icons/icon16/48/128.png`（依赖 sharp） | `design/package.json` 脚本 `npm run icons` / `npm run preview`；产物被 manifest 引用，工具本身不进扩展包 |
-| 待办 tab 入口（v1.0.0） | `manager/todo.js` | `init`（加载数据、设置监听、绑定事件、首启惰性创建今日待办）、4 视图路由（`handleHashChange` / `switchTo` / `writeHash`）、`renderSidebar`、`renderListView`、`renderAllView`、`renderDoneView`、`renderTemplatesView`、`onCreateList` / `startRenameList` / `onDeleteList`、`onAddItem` / `onToggleItem` / `onDeleteItem` / `startEditItem` / 拖拽事件、`onSaveAsTemplate` / `onUseTemplate` / `onCopyTemplateToCurrentList` / `onDeleteTemplate` / `makeTemplateCard` | manager.html `<script>` 引入（位于 manager.js 之前）；通过 `window.__managerBridge` 复用 manager 的 toast / confirm / edit 弹窗 |
+| 待办 tab 入口（v1.0.0，v1.0.1 调整） | `manager/todo.js` | `init`（加载数据、设置监听、绑定事件、首启惰性创建今日待办）、4 视图路由（`handleHashChange` / `switchTo` / `writeHash`）、`renderSidebar`、`renderListView`、`renderAllView`、`renderDoneView`、`renderTemplatesView`、`onCreateList` / `startRenameList` / `onDeleteList`、`onAddItem` / `onToggleItem` / `onDeleteItem` / `startEditItem` / 拖拽事件、`resizeAddItemInput`（测量添加事项输入框文本宽度，仅超出 480px 基准时扩展 `flex-basis`）、`onSaveAsTemplate` / `onUseTemplate` / `onCopyTemplateToCurrentList` / `onDeleteTemplate` / `makeTemplateCard` | manager.html `<script>` 引入（位于 manager.js 之前）；通过 `window.__managerBridge` 复用 manager 的 toast / confirm / edit 弹窗 |
 | 待办数据层（v1.0.0） | `utils/todo-storage.js` | 纯函数 + storage Promise：`generateUUID`、`normalizeListName`、`getOrCreateList`、`getOrCreateTodayList`、`getLists`、`createList`、`renameList`、`deleteList`、`getItems`、`saveItems`、`addItem`、`toggleItem`、`deleteItem`、`sortItems`、`loadTemplates`、`saveAsTemplate`、`createListFromTemplate`、`copyTemplateToList`、`deleteTemplate` | manager/todo.js（全部 CRUD 调用）；tests/todo-storage.test.js（36 例） |
-| 待办样式（v1.0.0） | `manager/todo.css` | 同页 Tab 切换下的待办视图样式；**不**重定义 `:root` 变量，直接复用 `manager.css` 已加载的 `--bg` / `--surface` / `--text` / `--blue` 等；自定义类以 `.todo-*` 前缀命名避免与采集模块冲突 | manager.html `<link>` 引入（与 manager.css 并列） |
+| 待办样式（v1.0.0，v1.0.1 调整） | `manager/todo.css` | 同页 Tab 切换下的待办视图样式；**不**重定义 `:root` 变量，直接复用 `manager.css` 已加载的 `--bg` / `--surface` / `--text` / `--blue` 等；自定义类以 `.todo-*` 前缀命名避免与采集模块冲突。v1.0.1：`.todo-sidebar` 固定桌面宽度为 300px 且不收缩；`.todo-add-form input` 使用 `flex: 0 1 480px` + `min-width: 0`，默认不增长但可在窄容器内收缩 | manager.html `<link>` 引入（与 manager.css 并列） |
 
 ---
 
@@ -121,7 +122,7 @@
 | 重命名 Esc | 取消编辑 | 恢复原值 | — | todo.js |
 | 工作台顶部「删除清单」按钮 `#todo-delete-list-btn`（**仅**此入口） | `showConfirmModal` 二次确认 → `deleteList(id)` | toast「已删除清单」；被删是今日清单 → 重建（下次 init） | — | todo.js、utils/todo-storage.js |
 | 工作台顶部「存为模板」按钮 `#todo-save-template-btn` | 空清单 → toast 拒绝；否则 `showEditModal` 输入模板名（默认取清单名）→ `saveAsTemplate` | 模板库新增卡片 | 空清单 → toast「清单为空，无法存为模板」 | todo.js、utils/todo-storage.js |
-| 工作台输入框 `#todo-add-input` + Enter | `addItem(listId, text)` → 新事项 `order = max(未完成)+1`、`completed=false` | 侧边栏计数 +1；事项插入未完成区 | 空内容 → 静默忽略 | todo.js、utils/todo-storage.js |
+| 工作台输入框 `[data-role="add-item-input"]` + Enter | `addItem(listId, text)` → 新事项 `order = max(未完成)+1`、`completed=false`；v1.0.1 输入过程中由 `resizeAddItemInput` 测量文本并调整 `flex-basis` | 侧边栏计数 +1；事项插入未完成区；输入框清空后回到 480px 基准 | 空内容 → 静默忽略；可用空间不足时输入框按 flex 收缩 | todo.js、todo.css、utils/todo-storage.js |
 | 复选框 `.todo-check`（`role=checkbox`）/ Space / Enter | `toggleItem(listId, itemId)` → 翻 `completed` + 写/清 `completedAt` | 勾选变绿、文本划线、沉底已完成区 | — | todo.js、utils/todo-storage.js |
 | 待办项文本双击 | `startEditItem(itemId)` → `contenteditable=true` 全选 | 可编辑态 | — | todo.js |
 | 待办项编辑 Enter / blur | `saveItems` 整桶重写 | 文本更新 | 空内容 = 视为删除；与原文相同 = noop | todo.js、utils/todo-storage.js |
@@ -387,7 +388,7 @@
 
 ### 8.6 包管理脚本
 
-- `package.json`：`version` 1.0.0；scripts `test`（`vitest run`）、`test:watch`；devDependencies 仅 `vitest ^4.1.10`。
+- `package.json`：`version` 1.0.1；scripts `test`（`vitest run`）、`test:watch`；devDependencies 仅 `vitest ^4.1.10`。
 - `design/package.json` scripts：`icons`（`node make-icons.js`）、`preview`；依赖 `sharp ^0.35.3`（仅图标生成用，不在扩展运行时）。
 
 ### 8.7 待办运行时配置（v1.0.0）
@@ -403,7 +404,17 @@
 
 ---
 
-## 9. 版本与本版变更（v1.0.0）
+## 9. 版本与变更
+
+### v1.0.1 — 待办工作台布局微调（2026-08-15）
+
+- 版本号：`manifest.json` / `package.json` 均为 **1.0.1**（上一版 1.0.0）。
+- **侧边栏**：`manager/todo.css` 中 `.todo-sidebar` 的默认桌面宽度由 240px 调整为 **300px**；仍使用 `flex-shrink: 0`，不参与收缩。
+- **添加事项输入框**：`.todo-add-form input` 使用 `flex: 0 1 480px` 与 `min-width: 0`。其初始弹性基准为 **480px**，窄窗口时可收缩；窗口扩宽时不因剩余空间自动增长，仅恢复至自身基准或内容需要的宽度。
+- **内容驱动扩展**：`manager/todo.js` 新增 `resizeAddItemInput(input)`。每次输入时用 canvas 文本测量当前输入值，若文本所需宽度超过 480px 则更新 inline `flex-basis`；提交后清空输入值并重设基准。数据模型、待办 CRUD、路由、权限与存储键均无变化。
+- **测试**：现有 Vitest 套件仍为 4 个测试文件、**100** 个用例，`npm test` 全部通过；本次未新增专门针对 DOM 尺寸计算的测试。
+
+### v1.0.0 — 待办清单功能（2026-08-15）
 
 - 版本号：`manifest.json` / `package.json` 均为 **1.0.0**（上一版 0.8.1）。
 - **新增待办功能**（同页 Tab，非独立页面）：

@@ -24,7 +24,7 @@
 
 /* ── 侧边栏 ── */
 .todo-sidebar {
-  width: 240px;
+  width: 300px;
   flex-shrink: 0;
   border-right: 1px solid var(--border);
   background: var(--surface);
@@ -271,7 +271,9 @@
   box-shadow: 0 0 0 2px var(--blue-soft);
 }
 .todo-add-form input {
-  flex: 1;
+  /* 以 480px 为初始基准；容器变窄时可收缩，空间变宽时不主动拉伸。 */
+  flex: 0 1 480px;
+  min-width: 0;
   border: none;
   outline: none;
   background: transparent;

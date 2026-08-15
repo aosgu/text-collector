@@ -1,6 +1,6 @@
 # 用户流程 — 网页文字采集器
 
-> 依据：`docs/_facts.md` 与代码（v1.0.0，2026-08-15）。以下为关键用户流程（12 个；流程 8 为 v0.8.0 新增；流程 9–12 为 v1.0.0 新增的待办），每个流程给出步骤与状态迁移。
+> 依据：`docs/_facts.md` 与代码（v1.0.1，2026-08-15）。以下为关键用户流程（12 个；流程 8 为 v0.8.0 新增；流程 9–12 为 v1.0.0 新增的待办；v1.0.1 微调流程 10 中工作台输入框的尺寸反馈），每个流程给出步骤与状态迁移。
 > 说明：代码中**不存在**显式的流程图/状态机文件（无 mermaid/dot/状态机库）；以下「状态迁移」均取自代码中可证明的状态变化：`addSnippet` / `toggleFavoriteSnippet` / `addItem` / `toggleItem` / `saveAsTemplate` 等的返回 action 分支、`clearAllSnippets` 的字段迁移、`chrome.storage.local` 键的变化。
 
 ---
@@ -252,9 +252,10 @@ saved: true→false（clearedFromHome=true）→ action:'deleted'（彻底删除
 | 3 | 跳到新清单工作台 | `state.currentListId = list.id`；`writeHash()` → `location.hash = '#todo/list/<id>'` | `manager/todo.js` |
 | 4 | 自动进入重命名态 | `setTimeout(() => startRenameList(list.id), 30)` → 侧边栏 name `contenteditable=true` 全选 | 同上 |
 | 5 | 用户输入新名 + Enter / blur | `renameList(id, newName)` → 存储更新 `name` + `updatedAt` | `utils/todo-storage.js` |
-| 6 | 工作台输入框自动 focus | `setTimeout(() => input.focus(), 0)` | `manager/todo.js` |
-| 7 | 用户输入待办文本 + Enter | `addItem(listId, text)` → 存储 push 新项（`order = max(未完成)+1`，`completed=false`）；写 `updatedAt` | `utils/todo-storage.js` |
-| 8 | UI 重渲染 | 侧边栏计数 +1、内容区新项插入未完成区 | `manager/todo.js` |
+| 6 | 工作台输入框自动 focus | `setTimeout(() => input.focus(), 0)`；输入框 CSS 基准为 `flex: 0 1 480px` | `manager/todo.js` / `manager/todo.css` |
+| 7 | 用户输入待办文本 | `input` 事件调用 `resizeAddItemInput(input)`：以 canvas 测量文本；所需宽度 ≤480px 时保持 480px 基准，超出时增大 inline `flex-basis`；容器不足时仍可收缩 | `manager/todo.js` |
+| 8 | 用户按 Enter 提交 | `addItem(listId, text)` → 存储 push 新项（`order = max(未完成)+1`，`completed=false`）；输入值清空并重新按 480px 基准测量；写 `updatedAt` | `manager/todo.js` / `utils/todo-storage.js` |
+| 9 | UI 重渲染 | 侧边栏计数 +1、内容区新项插入未完成区 | `manager/todo.js` |
 
 **状态迁移**（核心三步）：
 
@@ -272,7 +273,8 @@ items(新清单): []
 - `createList` 缺省 name → 「未命名清单」；name trim 后空 → 「未命名清单」；
 - `addItem` 空内容 trim → throw → UI 静默 catch；
 - 重命名 Esc 取消 → 恢复原值；blur 提交；trim 后空名拒绝；
-- 自动进入重命名态是 30ms 延迟（避免与 input focus 抢焦点）。
+- 自动进入重命名态是 30ms 延迟（避免与 input focus 抢焦点）；
+- 输入框以 480px 为常态宽度：窗口变窄时可缩小，窗口扩宽时不会因剩余空间超过 480px；只有内容本身超过基准时才按文字测量结果扩展。
 
 **涉及**：`utils/todo-storage.js`、`manager/todo.js`。
 

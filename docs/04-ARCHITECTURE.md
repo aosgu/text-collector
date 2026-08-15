@@ -1,6 +1,6 @@
 # 技术架构 — 网页文字采集器
 
-> 依据：`docs/_facts.md` 与当前代码（v1.0.0，2026-08-15）。禁止参考 `docs/archive/`。
+> 依据：`docs/_facts.md` 与当前代码（v1.0.1，2026-08-15）。禁止参考 `docs/archive/`。
 > 所有结论均可回溯到具体文件；推断处标注。
 
 ---
@@ -95,8 +95,8 @@ flowchart TB
 | 导出 | `text-collector/manager/export.js` | TXT/JSON 生成与下载 | 管理页 |
 | 网站导航 | `text-collector/manager/nav.js` + `text-collector/config/nav.json` | 读取包内导航配置、校验规范化、渲染 hover 分栏面板（v0.8.0；不读写 storage，不依赖 manager.js 状态） | 管理页 |
 | 待办数据层（v1.0.0） | `text-collector/utils/todo-storage.js` | 全部待办数据读写封装（清单 / 事项 / 模板）；错误 throw；与 `utils/storage.js` 互不依赖 | 管理页（被 `manager/todo.js` 调用） |
-| 待办 tab 入口（v1.0.0） | `text-collector/manager/todo.js` | 待办 tab 内部：四视图路由、render、事件、拖拽；通过 `window.__managerBridge` 复用采集模块的 toast/confirm/edit | 管理页 |
-| 待办样式（v1.0.0） | `text-collector/manager/todo.css` | 待办模块样式：侧边栏、4 视图、拖拽视觉、响应式；命名空间 `todo-` 前缀避免与采集模块冲突；**复用** `manager.css` 的 `:root` CSS 变量 | 管理页 |
+| 待办 tab 入口（v1.0.0，v1.0.1 调整） | `text-collector/manager/todo.js` | 待办 tab 内部：四视图路由、render、事件、拖拽；`resizeAddItemInput` 在输入/提交清空后用 canvas 测量文字宽度，仅在超过 480px 基准时调整输入框 `flex-basis`；通过 `window.__managerBridge` 复用采集模块的 toast/confirm/edit | 管理页 |
+| 待办样式（v1.0.0，v1.0.1 调整） | `text-collector/manager/todo.css` | 待办模块样式：侧边栏、4 视图、拖拽视觉、响应式；`.todo-sidebar` 宽度为 300px 且不收缩，`.todo-add-form input` 使用 `flex: 0 1 480px` 并可在窄容器收缩；命名空间 `todo-` 前缀避免与采集模块冲突；**复用** `manager.css` 的 `:root` CSS 变量 | 管理页 |
 | 管理页样式 | `text-collector/manager/manager.css` | 主题变量、卡片/菜单/弹窗样式、响应式、品牌 brand 区域 | 管理页 |
 | 测试 | `text-collector/tests/*` + `tests/helpers/load-source.js` | 纯函数单元测试（语法提取） | Node（vitest） |
 | 图标工具 | `design/`（make-icons.js / icon-spec.js / preview.js / build-icon.js） | 参数化生成 `icons/icon16/48/128.png` | Node（开发期） |
@@ -132,7 +132,7 @@ todo.js 依赖 manager.js 暴露的 `window.__managerBridge` 间接使用 toast/
 | `manager/nav.js` | 无模块依赖（仅 DOM + `chrome.runtime.getURL` + `fetch` 包内配置） | — |
 | `manager/toast.js` | 无模块依赖（仅 DOM） | — |
 | `manager/modal.js` | 无模块依赖（仅 DOM） | — |
-| `manager/todo.js`（v1.0.0） | `utils/todo-storage.js`：`createList` / `renameList` / `deleteList` / `addItem` / `toggleItem` / `deleteItem` / `saveItems` / `getLists` / `getItems` / `loadTemplates` / `saveAsTemplate` / `createListFromTemplate` / `copyTemplateToList` / `deleteTemplate` / `getOrCreateTodayList` / `normalizeListName` / `sortItems` / `getOrCreate` 等全部；`window.__managerBridge`：`showToast` / `showConfirmModal` / `showEditModal` | 全局函数（与 manager.js 共享同一份 storage.js 上下文） |
+| `manager/todo.js`（v1.0.0，v1.0.1 调整） | `utils/todo-storage.js`：`createList` / `renameList` / `deleteList` / `addItem` / `toggleItem` / `deleteItem` / `saveItems` / `getLists` / `getItems` / `loadTemplates` / `saveAsTemplate` / `createListFromTemplate` / `copyTemplateToList` / `deleteTemplate` / `getOrCreateTodayList` / `normalizeListName` / `sortItems` / `getOrCreate` 等全部；Web 平台 `getComputedStyle` / `HTMLCanvasElement.getContext('2d')` / `CanvasRenderingContext2D.measureText`（`resizeAddItemInput`）；`window.__managerBridge`：`showToast` / `showConfirmModal` / `showEditModal` | 全局函数（与 manager.js 共享同一份 storage.js 上下文） |
 | `tests/*.test.js` | 源码文件（`readSource` 读文本 + 语法提取） | Node fs / new Function |
 | `design/make-icons.js` | sharp | npm 依赖 |
 
