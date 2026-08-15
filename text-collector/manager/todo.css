@@ -192,12 +192,15 @@
 
 /* ── 主内容区 ── */
 .todo-content {
-  flex: 1;
+  /* 作为 #view-todo 的 flex 子项，必须允许收缩，避免侧边栏加宽后挤压其内部表单。 */
+  flex: 1 1 0;
+  min-width: 0;
   overflow-y: auto;
   padding: 32px 36px 64px;
 }
 .todo-content-inner {
-  max-width: 760px;
+  /* 为输入内容驱动的扩展保留比原 760px 更宽的可用空间。 */
+  max-width: 960px;
   margin: 0 auto;
 }
 
@@ -258,6 +261,8 @@
 .todo-add-form {
   display: flex;
   align-items: center;
+  width: 100%;
+  min-width: 0;
   gap: 8px;
   padding: 10px 14px;
   background: var(--surface);
@@ -273,6 +278,8 @@
 .todo-add-form input {
   /* 以 480px 为初始基准；容器变窄时可收缩，空间变宽时不主动拉伸。 */
   flex: 0 1 480px;
+  width: 480px;
+  max-width: calc(100% - 36px);
   min-width: 0;
   border: none;
   outline: none;
@@ -284,6 +291,11 @@
 }
 .todo-add-form input::placeholder { color: var(--text-dim); }
 .todo-add-form button {
+  /* 按钮为固定控件；auto 左外边距将其锚定在整行表单最右端。 */
+  flex: 0 0 28px;
+  margin-left: auto;
+  min-width: 28px;
+  min-height: 28px;
   border: none;
   background: var(--blue);
   color: #fff;

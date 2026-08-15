@@ -341,7 +341,7 @@
 - **用户故事**：作为用户，我能给当前清单加待办、勾选、删除、改内容、给未完成项排序。
 - **触发入口**：工作台输入框（`[data-role="add-item-input"]`，`Enter` 提交）+ 复选框（`.todo-check` / `role=checkbox`，Space/Enter 切换）+ 悬停删除按钮（`.todo-item-delete`）+ 双击文本进入编辑 + 未完成项拖拽手柄（`.todo-item-handle`）。
 - **交互流程**：
-  - **添加**：`addItem(listId, text)` → trim 后空 throw；`order = max(未完成项.order)+1`（不影响已完成项 order）；保存后自动重渲染 sidebar（计数）+ 内容区；`updatedAt` 顺带写。v1.0.1 中输入框初始 `flex-basis` 为 480px：窄容器内允许收缩、容器变宽时不因剩余空间继续拉伸；`input` 事件调用 `resizeAddItemInput`，仅在当前文字的测量宽度超过 480px 时扩大其 `flex-basis`，提交后清空并重置。
+  - **添加**：`addItem(listId, text)` → trim 后空 throw；`order = max(未完成项.order)+1`（不影响已完成项 order）；保存后自动重渲染 sidebar（计数）+ 内容区；`updatedAt` 顺带写。v1.0.1 中输入框初始 `width` 与 `flex-basis` 均为 480px：窄容器内允许收缩、容器变宽时不因剩余空间继续拉伸；`input` 事件调用 `resizeAddItemInput`，仅在当前文字的测量宽度超过 480px 时同步扩大其 `width` 与 `flex-basis`，提交后清空并重置。右侧内容内层最大宽度为 960px，添加按钮固定为 28px 弹性项，超长内容不会挤压加号。
   - **勾选**：`toggleItem(listId, itemId)` → 翻转 `completed` + 写/清 `completedAt`；UI 切复选框 + 文本划线 + 沉底到「已完成」区。
   - **删除**：`deleteItem(listId, itemId)`；直接删除，无二次确认（**待办项是低破坏操作**）；UI 立即移除。
   - **内联编辑**：双击文本 → `contenteditable=true` 全选；Enter 保存、Esc 取消、blur 提交；空内容 = 视为删除；与原文相同 = noop；变更通过 `saveItems` 整存。
@@ -351,7 +351,7 @@
   - 完成后「已完成」区可点击「已完成 N」label 折叠/展开（`state.showCompleted`）；
   - 跨清单汇总（`#todo/all` / `#todo/done`）下复选框仍可点；删除在汇总视图下也会同步影响原清单；
   - 拖拽跨 list（`ul.dataset.listId` 不一致）拒绝；跨"已完成"边界拒绝；
-  - 添加事项输入框为空或文本不超过 480px 时保持 480px 基准；在可用空间小于基准时依赖 `flex-shrink` 收缩；超长文本会扩大基准但仍会受容器可用宽度约束。
+  - 添加事项输入框为空或文本不超过 480px 时保持 480px 基准；在可用空间小于基准时依赖 `flex-shrink` 收缩；超长文本会同步扩大 `width` 与 `flex-basis`，但仍会受容器可用宽度约束；添加按钮始终保留 28px 方形尺寸。
 - **关联**：`utils/todo-storage.js`（addItem / toggleItem / deleteItem / saveItems / sortItems）、`manager/todo.js`（onAddItem / onToggleItem / onDeleteItem / startEditItem / resizeAddItemInput / onDragStart 等）、`manager/todo.css`（`.todo-sidebar` / `.todo-add-form` / `.todo-item` / `.todo-check` / `.todo-item-handle`）。
 - **置信度：高**（addItem / toggleItem / deleteItem / sortItems 等有单测覆盖）。
 
