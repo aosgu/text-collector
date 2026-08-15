@@ -430,11 +430,12 @@
 
 ### G13. 决策：扩大待办侧边栏；输入框采用「固定基准 + 收缩优先 + 内容驱动扩展」
 
-- **决策**：待办工作台 `.todo-sidebar` 的桌面宽度设为 **300px**，继续使用 `flex-shrink: 0`；添加事项输入框 `.todo-add-form input` 设为 `flex: 0 1 480px` 与 `min-width: 0`。因此输入框以 480px 为基础，容器不足时可收缩，容器变宽时不因剩余空间增长；只有 `resizeAddItemInput` 测得输入文字所需宽度超过 480px 时，才动态上调 inline `flex-basis`。
+- **决策**：待办工作台 `.todo-sidebar` 的桌面宽度设为 **300px**，继续使用 `flex-shrink: 0`；右侧 `.todo-content` 设为 `flex: 1 1 0` + `min-width: 0`，其内容内层最大宽度为 960px。添加事项输入框 `.todo-add-form input` 设为 `flex: 0 1 480px`、`width: 480px` 与 `min-width: 0`；添加按钮设为 `flex: 0 0 28px`。因此输入框以 480px 为基础，容器不足时可收缩，容器变宽时不因剩余空间增长；只有 `resizeAddItemInput` 测得输入文字所需宽度超过 480px 时，才同步上调 inline `width` 与 `flex-basis`。
 - **背景（用户明确）**：侧边栏需要更宽的工作区以改善清单名称和导航信息的可读性；添加事项输入框应在正常场景保持稳定宽度，避免宽窗口下空白区被无意义占满，同时仍允许用户输入明显更长的待办文本。
 - **影响**：
   - 窄窗口仍保持原有弹性收缩路径，不因 480px 基准造成水平溢出；
-  - 用户输入超过基准后，输入框只在剩余空间允许的范围内扩大；提交后清空输入值并回到 480px 基准；
+  - 用户输入超过基准后，输入框只在右侧 960px 内容区和剩余空间允许的范围内扩大；提交后清空输入值并回到 480px 基准；
+  - 添加按钮不参与收缩，始终保持 28px 方形，避免长文本挤压加号；
   - 本决策仅影响管理页运行时 DOM/CSS，不引入数据字段、存储写入、路由或外部依赖；
   - 宽度测量使用浏览器原生 canvas `measureText`，与当前 `fontStyle`、`fontVariant`、`fontWeight`、`fontSize`、`fontFamily` 一致。
 - **置信度：高**（用户明确 + `manager/todo.css` / `manager/todo.js` 代码直接可证）。

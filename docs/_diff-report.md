@@ -182,7 +182,7 @@
 | 本地多清单、事项、模板及「今日待办」惰性创建 | `utils/todo-storage.js`，`todo_*` 存储键 | v1.0.0 |
 | 待办项内联编辑、未完成项拖拽与跨清单汇总 | `manager/todo.js`、`manager/todo.css` | v1.0.0 |
 | 工作台侧边栏加宽为 300px | `.todo-sidebar { width: 300px; flex-shrink: 0; }` | v1.0.1 |
-| 输入框稳定 480px 基准、窄容器收缩、超长文本按内容扩展 | `.todo-add-form input { flex: 0 1 480px; }` + `resizeAddItemInput` | v1.0.1 |
+| 输入框稳定 480px 基准、窄容器收缩、超长文本按内容扩展且加号不变形 | `.todo-content { flex: 1 1 0; min-width: 0; }`、`.todo-add-form input { flex: 0 1 480px; width: 480px; }`、固定 `28px` 添加按钮 + `resizeAddItemInput` 同步设置 width / flex-basis | v1.0.1 |
 
 ---
 

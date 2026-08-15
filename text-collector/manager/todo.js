@@ -79,6 +79,7 @@
 
   /**
    * 待办输入框的默认弹性基准为 480px；只有输入内容超过该宽度时才扩大基准。
+   * 以 width 与 flex-basis 同步写入，避免部分浏览器在 flex 收缩后只保留旧的可见宽度。
    * flex-shrink 保持开启，因此窄窗口下仍可收缩，窗口重新变宽时则最多恢复至内容所需宽度。
    */
   function resizeAddItemInput(input) {
@@ -87,13 +88,16 @@
     const canvas = resizeAddItemInput.canvas ||
       (resizeAddItemInput.canvas = document.createElement('canvas'));
     const ctx = canvas.getContext('2d');
+    if (!ctx) return;
     ctx.font = [style.fontStyle, style.fontVariant, style.fontWeight,
       style.fontSize, style.fontFamily].join(' ');
     const value = input.value || input.placeholder || '';
     const contentWidth = Math.ceil(ctx.measureText(value).width);
     const padding = (parseFloat(style.paddingLeft) || 0) +
       (parseFloat(style.paddingRight) || 0);
-    input.style.flexBasis = Math.max(480, contentWidth + padding + 2) + 'px';
+    const targetWidth = Math.max(480, contentWidth + padding + 2) + 'px';
+    input.style.width = targetWidth;
+    input.style.flexBasis = targetWidth;
   }
 
   /** bridge：访问 manager.js 暴露的 toast/confirm/edit；不存在时降级为 noop */
