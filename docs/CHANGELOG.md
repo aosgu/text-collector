@@ -18,8 +18,9 @@
   - `.todo-content` 改为 `flex: 1 1 0` + `min-width: 0`，内容内层最大宽度增至 `960px`，避免侧边栏加宽后压缩右侧可用空间；
   - `.todo-add-form` 显式占满内容宽度；`.todo-add-form input` 从 `flex: 1` 调整为 `flex: 0 1 480px`，并设置 `width: 480px`、`max-width: calc(100% - 36px)` 与 `min-width: 0`；
   - 输入框以 **480px** 为常态基准：容器变窄时允许收缩，容器变宽时不因剩余空间继续拉伸；恢复空间后最多回到基准宽度。
-- **添加按钮防挤压**（`manager/todo.css`）
-  - `.todo-add-form button` 设为 `flex: 0 0 28px`，并设置最小宽高为 `28px`，确保加号始终保持方形。
+- **添加按钮防挤压并固定右侧**（`manager/todo.css`）
+  - `.todo-add-form button` 设为 `flex: 0 0 28px`，并设置最小宽高为 `28px`，确保加号始终保持方形；
+  - 添加 `margin-left: auto`，使按钮占用输入框之后的剩余空间并始终贴齐整行表单右侧。
 - **文字超出时按内容扩展**（`manager/todo.js`）
   - `resizeAddItemInput(input)` 复用 canvas 并按当前计算字体测量输入文字；
   - 在每次 `input` 事件时，只有文字所需宽度超过 480px 才同步提高 inline `width` 与 `flex-basis`；
