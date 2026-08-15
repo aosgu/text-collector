@@ -335,6 +335,12 @@ function applyRouteFromHash() {
   // 采集数据条数仅在采集 tab 下展示；待办 tab 下的总览在侧边栏的徽标
   if (toolbarCount) toolbarCount.classList.toggle('hidden', isTodo);
   setCollectExtrasVisible(!isTodo);
+
+  // 主 Tab 切到待办时，同步把 hash 交给 todo.js 解析并渲染。
+  // TodoApp 尚在异步初始化时会自行忽略；init 完成后会再次强制渲染首屏。
+  if (isTodo && window.TodoApp && typeof window.TodoApp.handleHashChange === 'function') {
+    window.TodoApp.handleHashChange();
+  }
 }
 
 window.addEventListener('hashchange', applyRouteFromHash);
