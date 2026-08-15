@@ -15,6 +15,7 @@
 - **采集开关**：管理页开关或快捷键 `Ctrl+Shift+S`，关闭时工具栏图标显示灰色 OFF
 - **网站导航**：管理页头部导航图标，hover 展开网站快捷方式分栏面板（新标签页打开），站点列表由包内 `config/nav.json` 配置
 - **待办清单**（v1.0.0 起）：管理页顶 Tab 切换到「待办」即可使用：多清单 + 待办项 + 模板库（首启惰性创建「今日待办」），数据与采集完全隔离（`todo_` 前缀存储键）
+- **待办工作台布局**（v1.0.1）：左侧边栏桌面基准宽度为 300px；添加事项输入框以 480px 为弹性基准，窄窗口可收缩、宽窗口不因剩余空间继续拉伸，只有输入文本超过基准时按内容扩展
 - **键盘可达**：Tab 导航、焦点陷阱、aria 语义
 
 ## 文档地图
@@ -173,4 +174,4 @@ text-collector/
 
 [MIT](../LICENSE)
 
-当前版本 **v1.0.0**。变更日志见 [`docs/CHANGELOG.md`](../docs/CHANGELOG.md)；v0.7.2 及更早的版本历史见 [`docs/archive/legacy-notes.md`](../docs/archive/legacy-notes.md)（历史文档，仅供追溯）。
+当前版本 **v1.0.1**。变更日志见 [`docs/CHANGELOG.md`](../docs/CHANGELOG.md)；v0.7.2 及更早的版本历史见 [`docs/archive/legacy-notes.md`](../docs/archive/legacy-notes.md)（历史文档，仅供追溯）。

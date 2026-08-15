@@ -2,8 +2,8 @@
 
 > 对照基准：
 > - 旧文档：`docs/archive/original-PRD.md`（PRD v0.5，2026-08-10）、`docs/archive/legacy-notes.md`（README 版本历史 v0.5–v0.7.2 等）
-> - 当前代码：v0.8.1 工作区快照，2026-08-14（`_facts.md` 同源）
-> - 用途：只做差异对照；本报告不改动 docs/01~06。
+> - 当前代码：v1.0.1 工作区快照，2026-08-15（以 `docs/_facts.md` 为当前事实源）
+> - 用途：只做旧 PRD / 旧 README 与当前代码的差异对照；本报告不替代 docs/01~07 的现行规格。
 > 证据格式：`文件:位置` 或 grep 结论。
 
 ---
@@ -169,10 +169,20 @@
 | 图标更换（品牌蓝圆角方 + 无衬线开引号） | `icons/*.png` + `design/` 参数化工具链（sharp） | v0.7.2 |
 | 响应式布局 `@media (max-width: 640px)`（含触摸设备删除按钮常驻） | `manager.css` L752 | 迭代新增（PRD v0.4 曾将移动端适配移至 P2；当前以响应式 CSS 形态部分落地） |
 | `prefers-reduced-motion` 减弱动效 | `manager.css` L776 | 迭代新增 |
-| 测试体系（vitest + 语法提取纯函数，64 用例） | `tests/` + `vitest.config.js` + `package.json` | 迭代新增（PRD 无测试相关内容；v0.8.0 起含 nav 9 例） |
+| 测试体系（vitest + 语法提取纯函数，100 用例） | `tests/` + `vitest.config.js` + `package.json` | 迭代新增（PRD 无测试相关内容；v0.8.0 起含 nav 9 例，v1.0.0 增 todo-storage 36 例） |
 | 删除撤销时 `ignoreAllOrderChanges` 抑制 onChanged | `manager.js` | 迭代新增 |
 | `listBridge` 状态通道（状态修改收敛命名函数） | `manager.js` 头部约定 | 模块拆分时新增 |
 | 管理页模块拆分（render/toast/modal/export 独立文件） | `manager/` 目录结构（PRD §4.3 仅 manager.js 单文件） | 迭代新增 |
+
+### 3.4 待办工作台与布局交互（v1.0.0–v1.0.1）
+
+| 新增能力 | 代码证据 | 迭代来源 |
+|----------|----------|----------|
+| 同页待办 tab 与 hash 路由（工作台 / 全部待办 / 已完成 / 模板库） | `manager/manager.html`、`manager/manager.js`、`manager/todo.js` | v1.0.0 |
+| 本地多清单、事项、模板及「今日待办」惰性创建 | `utils/todo-storage.js`，`todo_*` 存储键 | v1.0.0 |
+| 待办项内联编辑、未完成项拖拽与跨清单汇总 | `manager/todo.js`、`manager/todo.css` | v1.0.0 |
+| 工作台侧边栏加宽为 300px | `.todo-sidebar { width: 300px; flex-shrink: 0; }` | v1.0.1 |
+| 输入框稳定 480px 基准、窄容器收缩、超长文本按内容扩展 | `.todo-add-form input { flex: 0 1 480px; }` + `resizeAddItemInput` | v1.0.1 |
 
 ---
 
@@ -218,6 +228,6 @@
 - **保留**：PRD v0.5 全部 P0 功能点 + 多数 P1（24 项管理/采集条目 + 技术方案），删除/导入除外。
 - **已删除**：导入功能全家（按钮、`importSnippets`、file input、导入验收项）——v0.7.1。
 - **未实现**：`about:blank`「未知页面」标记（PRD 写了但从未实现）；Shadow DOM 采集（PRD 主动降级）；性能/兼容性验收项（无法代码验证，待确认）。
-- **迭代新增**：网站导航（v0.8.0）、收藏/编辑/双页签体系（v0.7.0）、孤儿扫描与并发校验（v0.6.x）、无障碍与键盘支持、视觉重设计、响应式、测试体系、`tabs` 权限、图标工具链。
+- **迭代新增**：待办工作台与本地待办数据层（v1.0.0）、待办侧边栏/输入框响应式尺寸行为（v1.0.1）、网站导航（v0.8.0）、收藏/编辑/双页签体系（v0.7.0）、孤儿扫描与并发校验（v0.6.x）、无障碍与键盘支持、视觉重设计、响应式、测试体系、`tabs` 权限、图标工具链。
 - **不一致**：13 项（§4），其中 4.2（NFC 顺序）为代码刻意修正、4.10 为 PRD 内部矛盾、4.1 影响实际采集行为。
 - **README 迭代说明与代码不符**：6 项（§5），核心为「导入导出恢复」表述（5.1）与已删导入相关的残留记录（5.2–5.4）。
