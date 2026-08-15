@@ -14,7 +14,7 @@
 ### v1.0.1 实际落地修订
 
 1. **侧边栏默认宽度调整为 300px**：`manager/todo.css` 中 `.todo-sidebar` 保持 `flex-shrink: 0`，因此在可用桌面空间内维持 300px，不被弹性压缩。
-2. **添加事项输入框改为稳定基准、按内容扩展**：`.todo-add-form input` 从 `flex: 1` 调整为 `flex: 0 1 480px` + `min-width: 0`。在窄容器中保留收缩行为；窗口扩宽时只恢复至 480px 基准、不消耗额外空白；`manager/todo.js` 的 `resizeAddItemInput` 以 canvas 测量实际文本，只有超过 480px 时才调高 `flex-basis`，提交后清空并恢复基准。
+2. **添加事项输入框改为稳定基准、按内容扩展**：`.todo-add-form input` 从 `flex: 1` 调整为 `flex: 0 1 480px` + `width: 480px` + `min-width: 0`。右侧内容区允许收缩且内层最大宽度为 960px，为可见扩展保留空间；在窄容器中保留收缩行为；窗口扩宽时只恢复至 480px 基准、不消耗额外空白；`manager/todo.js` 的 `resizeAddItemInput` 以 canvas 测量实际文本，只有超过 480px 时才同步调高 `width` 与 `flex-basis`，提交后清空并恢复基准。添加按钮固定为 `flex: 0 0 28px`，不会被长文本挤压变形。
 3. **数据与工作流不变**：清单/事项/模板的存储模型、Enter 提交、创建事项后的重渲染、hash 路由及待办交互均未变化。
 
 ### v1.0-draft → v1.0.0 实际落地修订

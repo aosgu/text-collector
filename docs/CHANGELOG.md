@@ -14,12 +14,15 @@
 - **侧边栏加宽**（`manager/todo.css`）
   - `.todo-sidebar` 默认宽度由 `240px` 调整为 **`300px`**；
   - 保持 `flex-shrink: 0`，以固定桌面侧边栏的可读空间。
-- **添加事项输入框的弹性规则重设**（`manager/todo.css`）
-  - `.todo-add-form input` 从 `flex: 1` 调整为 `flex: 0 1 480px`，并保留 `min-width: 0`；
+- **添加事项输入框的弹性规则重设与可见宽度修复**（`manager/todo.css`）
+  - `.todo-content` 改为 `flex: 1 1 0` + `min-width: 0`，内容内层最大宽度增至 `960px`，避免侧边栏加宽后压缩右侧可用空间；
+  - `.todo-add-form` 显式占满内容宽度；`.todo-add-form input` 从 `flex: 1` 调整为 `flex: 0 1 480px`，并设置 `width: 480px`、`max-width: calc(100% - 36px)` 与 `min-width: 0`；
   - 输入框以 **480px** 为常态基准：容器变窄时允许收缩，容器变宽时不因剩余空间继续拉伸；恢复空间后最多回到基准宽度。
+- **添加按钮防挤压**（`manager/todo.css`）
+  - `.todo-add-form button` 设为 `flex: 0 0 28px`，并设置最小宽高为 `28px`，确保加号始终保持方形。
 - **文字超出时按内容扩展**（`manager/todo.js`）
-  - 新增 `resizeAddItemInput(input)`，复用 canvas 并按当前计算字体测量输入文字；
-  - 在每次 `input` 事件时，只有文字所需宽度超过 480px 才提高 inline `flex-basis`；
+  - `resizeAddItemInput(input)` 复用 canvas 并按当前计算字体测量输入文字；
+  - 在每次 `input` 事件时，只有文字所需宽度超过 480px 才同步提高 inline `width` 与 `flex-basis`；
   - 按 Enter 提交后清空输入值并重新计算，输入框回到 480px 基准。
 
 ### 验证
