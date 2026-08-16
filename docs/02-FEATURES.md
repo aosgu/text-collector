@@ -1,7 +1,7 @@
 # 功能规格 — 网页文字采集器
 
-> 依据：`docs/_facts.md` 与代码（v1.0.1，2026-08-15）。每个功能包含：用户故事、触发入口、交互流程、输入/输出、边界情况、关联接口/数据/组件、置信度。
-> 交互描述均对应到具体组件（DOM id/class）与文件。共 **27 个功能**（功能 21 为 v0.8.0 新增的网站导航；功能 22–27 为 v1.0.0 新增的待办清单；v1.0.1 微调功能 24 的工作台布局与输入宽度行为）。
+> 依据：`docs/_facts.md` 与代码（v1.0.2，2026-08-16）。每个功能包含：用户故事、触发入口、交互流程、输入/输出、边界情况、关联接口/数据/组件、置信度。
+> 交互描述均对应到具体组件（DOM id/class）与文件。共 **27 个功能**（功能 21 为 v0.8.0 新增的网站导航；功能 22–27 为 v1.0.0 新增的待办清单；v1.0.1 微调功能 24 的工作台布局与输入宽度行为；v1.0.2 修复功能 14 页面内 toast 的视觉渲染缺陷，交互不变）。
 
 ---
 
@@ -203,10 +203,10 @@
 - **用户故事**：操作后要有即时、不打扰的反馈。
 - **触发入口**：由各功能自动触发（采集结果、复制、删除、导出等）。
 - **交互流程**：
-  - **页面内 toast**（`content/content.js` `showToast`）：closed Shadow DOM 注入宿主页；`detectDarkSurrounding`（系统深浅色偏好 + 页面背景亮度 YIQ）自动选浅/深色版；1500ms 淡出 + 200ms 移除；success/info/danger 三种徽标（硬编码 SVG）；宿主样式由 `content/content.css` + 内联 `!important` 双重钉死。
+  - **页面内 toast**（`content/content.js` `showToast`）：closed Shadow DOM 注入宿主页；`detectDarkSurrounding`（系统深浅色偏好 + 页面背景亮度 YIQ）自动选浅/深色版；1500ms 淡出 + 200ms 移除；success/info/danger 三种徽标（硬编码 SVG）；宿主样式由 `content/content.css` + 内联 `!important` 双重钉死；宿主**不裁剪子元素绘制**（无 `overflow: hidden`、`contain` 不含 `paint`，v1.0.2）——否则会裁掉 toast 自身的 box-shadow，圆角外残留灰色直角块。
   - **管理页 toast**（`manager/toast.js`）：单实例（新 toast 顶掉旧）；默认 1600ms、带操作按钮 5000ms；`ICON_CHECK/INFO/ALERT` 徽标。
-- **边界情况**：页面禁止 `attachShadow` → 放弃 toast（不泄漏样式）；toast 宿主被页面 CSS 污染 → 双保险隔离；管理页 toast 操作按钮（如「撤销」）点击后立即 dismiss。
-- **关联**：`content/content.js`、`content/content.css`、`manager/toast.js`、`manager/manager.html` `#toast-container`。
+- **边界情况**：页面禁止 `attachShadow` → 放弃 toast（不泄漏样式）；toast 宿主被页面 CSS 污染 → 双保险隔离（几何/层级/背景钉死与伪元素屏蔽与裁剪属性无关）；管理页 toast 操作按钮（如「撤销」）点击后立即 dismiss。
+- **关联**：`content/content.js`、`content/content.css`、`manager/toast.js`、`manager/manager.html` `#toast-container`、`tests/content.test.js`（「Toast 宿主样式契约」5 例，v1.0.2）。
 - **置信度：高**。
 
 ## 功能 15：确认 / 编辑弹窗（modal）
@@ -260,7 +260,7 @@
 
 ## 功能 20：单元测试（开发期能力）
 
-- **说明**：`tests/` 用语法提取源码纯函数（`helpers/load-source.js` 的 `extractFunction`/`extractObjectLiteral`，不执行浏览器代码）在 Node 环境跑 vitest；`storage.test.js` 16 例（getUrlKey/getDomain/filterOrderRecords 等）、`content.test.js` 39 例（准入规则/截断等）、`nav.test.js` 9 例（`normalizeNavConfig` 配置校验，v0.8.0 新增）——合计 64 例。
+- **说明**：`tests/` 用语法提取源码纯函数（`helpers/load-source.js` 的 `extractFunction`/`extractObjectLiteral`，不执行浏览器代码）在 Node 环境跑 vitest；`storage.test.js` 16 例（getUrlKey/getDomain/filterOrderRecords 等）、`content.test.js` 44 例（准入规则/截断等纯函数 39 例 + v1.0.2 新增「Toast 宿主样式契约」5 例：对 `content.js` cssText 数组与 `content.css` 宿主规则做源码级静态断言——不得 `overflow: hidden`、`contain` 不含 `paint`、双源属性集一致、几何钉死不回退）、`nav.test.js` 9 例（`normalizeNavConfig` 配置校验，v0.8.0 新增）、`todo-storage.test.js` 36 例（待办数据层，v1.0.0 新增）——合计 **105 例**。
 - **关联**：`tests/*`、`vitest.config.js`（environment: node）、`package.json`（`npm test`）。
 - **置信度：高**。
 

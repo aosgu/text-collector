@@ -1,7 +1,8 @@
 # 代码事实清单 — text-collector
 
-> 生成方式：对当前代码快照（v1.0.1，2026-08-15）的源码逐文件扫描，仅记录代码中可证明存在的内容。
+> 生成方式：对当前代码快照（v1.0.2，2026-08-16）的源码逐文件扫描，仅记录代码中可证明存在的内容。
 > 修订记录：
+> - 2026-08-16（v1.0.2）— 修复内容页 toast 圆角矩形外的灰色直角背景：`content/content.js` 与 `content/content.css` 中宿主 `#text-collector-toast-host` 移除 `overflow: hidden !important`、`contain` 由 `layout style paint` 调整为 `layout style`（paint 包含/overflow 会把 `.toast` 的 box-shadow 裁剪到宿主盒内，圆角外残留阴影形成灰色直角矩形）；新增「Toast 宿主样式契约」回归用例 5 例（content 39 → 44，总数 100 → **105**）；版本号同步至 1.0.2（manifest.json / package.json）。
 > - 2026-08-15（v1.0.1）— 待办工作台布局微调及修复：`manager/todo.css` 将 `.todo-sidebar` 桌面宽度调整为 300px；`.todo-content` 使用 `flex: 1 1 0` + `min-width: 0`，`.todo-content-inner` 的最大宽度为 960px，以提供输入框可见扩展空间；`.todo-add-form input` 采用 `flex: 0 1 480px` + `width: 480px`，在窄容器中可收缩、在可用空间充足时不因剩余空间继续拉伸。添加按钮固定为 `flex: 0 0 28px`，并以 `margin-left: auto` 锚定至整行表单最右端，不被挤压变形。`manager/todo.js` 的 `resizeAddItemInput` 输入和提交清空后按文本测量结果**同步更新 `width` 与 `flex-basis`**，仅当内容所需宽度超过 480px 时扩展。`manager.js` 在主路由进入 `#todo` 时转交给 `TodoApp.handleHashChange()`；待办模块在路由解析后无条件渲染侧边栏和内容区，确保直接打开 `manager.html#todo` 不会白屏。
 > - 2026-08-12 — 根据用户确认，将「导入功能」状态由「待确认（无证据）」更正为「已删除」（见 §4.3）。
 > - 2026-08-13（v0.8.0）— 新增网站导航模块（`manager/nav.js` + `config/nav.json`）相关事实：§2 模块表、§3.1 操作表、§5.1/5.3 接口、§6.2 内存状态、§8.5 配置文件；并记录导航面板分栏与 tooltip 的样式修复。
@@ -49,7 +50,7 @@
 | 存储工具层 | `utils/storage.js` | `CONFIG` 常量、`SCHEMA_VERSION=1`、`generateUUID`、`getUrlKey`、`getDomain`、`adoptOrphanSnippets`、`addSnippet`、`deleteSnippet`、`filterOrderRecords`、`getFilteredOrder`、`clearAllSnippets`、`getSnippets`、`getAllSnippets`、`toggleFavoriteSnippet`、`updateSnippetText`、`getCollectEnabled`、`setCollectEnabled`、`getEarliestDate`、`getStorageEstimate` | content.js（addSnippet）、manager.js（adoptOrphanSnippets/getCollectEnabled/setCollectEnabled/getEarliestDate/clearAllSnippets/filterOrderRecords/getFilteredOrder）、render.js（getSnippets/getStorageEstimate/deleteSnippet/toggleFavoriteSnippet/updateSnippetText）、export.js（getAllSnippets）、service-worker.js（get/set collectEnabled）、tests（getUrlKey/getDomain/filterOrderRecords/CONFIG） |
 | 后台 Service Worker | `background/service-worker.js` | `updateBadge`；监听 `onInstalled`（初始化 `schemaVersion`/`collectEnabled`）、`onStartup`、顶层读 storage 兜底同步 badge、`action.onClicked`（打开/聚焦待办页面）、`commands.onCommand('toggle-collect')`、`storage.onChanged` | 由浏览器事件驱动；管理页/内容脚本不直接调用 |
 | 采集（内容脚本） | `content/content.js` | `processSelection`（准入规则→写库→toast）、`meetsLengthThreshold`、`isPureSymbol`、`isPureNumber`、`isPureURL`、`getActiveElement`、`isEditableElement`、`isSelectionInEditable`、`truncateText`、`detectDarkSurrounding`、`showToast`、`removeToastHost`；监听 `selectionchange`（500ms 防抖）与 `chrome.storage.onChanged` | 由页面事件驱动；`addSnippet` 来自 storage.js |
-| 内容脚本样式 | `content/content.css` | 钉死 toast 宿主 `#text-collector-toast-host` 的几何/层级/伪元素 | 由 manifest 注入所有页面 |
+| 内容脚本样式 | `content/content.css` | 钉死 toast 宿主 `#text-collector-toast-host` 的几何/层级/伪元素；**不裁剪子元素绘制**（无 `overflow: hidden`、`contain` 不含 `paint`，v1.0.2——避免裁掉 toast 自身 box-shadow 造成圆角外灰色直角块） | 由 manifest 注入所有页面 |
 | 管理页入口/编排 | `manager/manager.js` | `init`（adoptOrphanSnippets→renderToggle→loadFirstPage→setupListeners）、开关渲染/切换、清空确认、页签切换、导出菜单、storage 实时订阅（新记录 prepend + 提示条）、`listBridge` 状态通道；主路由进入 `#todo` 时转交 `TodoApp.handleHashChange()` | manager.html `<script>` 引入 |
 | 网站导航 | `manager/nav.js` + `config/nav.json` | `normalizeNavConfig`（纯函数：配置校验/规范化，单测覆盖）、`loadNavConfig`（`fetch(chrome.runtime.getURL('config/nav.json'))` 读取包内配置）、`renderNavPanel`、`initNav`（hover 展开/200ms 宽限收起、点击切换、Esc/Enter/Space/ArrowDown 键盘可达、新标签页打开链接；无有效配置时隐藏 `#nav-root`） | manager.html `<script>` 引入（先于 manager.js），自初始化，不读写 manager.js 全局状态 |
 | 列表渲染 | `manager/render.js` | `loadFirstPage`、`loadMore`、`updateRecordInfo`、`applyTruncationCheck`、`createCard`（收藏/复制/展开/删除/编辑按钮）、`deleteRecord`（含撤销）、`performDeleteRecord`、`copyToClipboard`、`prependNewCards`、`renderLoadError` | manager.js（init/onChanged/handleClearAll）；卡片事件自触发 |
@@ -57,7 +58,7 @@
 | 管理页 Toast | `manager/toast.js` | `showToast`（单实例，kind: success/info/danger，可带操作按钮）、`dismiss`；`ICON_BOOKMARK_OUTLINE`/`ICON_BOOKMARK_SOLID`/`ICON_TRASH`/`ICON_CHECK`/`ICON_INFO`/`ICON_ALERT` 常量 | render.js、export.js、manager.js |
 | 导出 | `manager/export.js` | `handleExport(format)`（TXT 带 UTF-8 BOM / JSON 含 schemaVersion）、`downloadBlob` | manager.js（导出菜单项点击） |
 | 管理页样式 | `manager/manager.css` | 全部视觉样式 + `:root` CSS 变量（主题色板） | manager.html `<link>` 引入 |
-| 单元测试 | `tests/storage.test.js`、`tests/content.test.js`、`tests/nav.test.js`、`tests/todo-storage.test.js`、`tests/helpers/load-source.js` | 用语法提取纯函数（`extractFunction`/`extractObjectLiteral`）在 Node 环境运行 vitest；storage 16 + content 39 + nav 9 + todo-storage 36 = **100** 个用例 | `npm test`（vitest，见 `package.json`/`vitest.config.js`，environment: node） |
+| 单元测试 | `tests/storage.test.js`、`tests/content.test.js`、`tests/nav.test.js`、`tests/todo-storage.test.js`、`tests/helpers/load-source.js` | 用语法提取纯函数（`extractFunction`/`extractObjectLiteral`）在 Node 环境运行 vitest；storage 16 + content 44（含 v1.0.2 新增「Toast 宿主样式契约」5 例：对 `content.js` cssText 数组与 `content.css` 宿主规则做源码级静态断言）+ nav 9 + todo-storage 36 = **105** 个用例 | `npm test`（vitest，见 `package.json`/`vitest.config.js`，environment: node） |
 | 图标生成工具（开发期，非运行时） | `design/`（`make-icons.js`、`icon-spec.js`、`preview.js`、`build-icon.js` 等） | 参数化生成 `icons/icon16/48/128.png`（依赖 sharp） | `design/package.json` 脚本 `npm run icons` / `npm run preview`；产物被 manifest 引用，工具本身不进扩展包 |
 | 待办 tab 入口（v1.0.0，v1.0.1 调整） | `manager/todo.js` | `init`（加载数据、设置监听、绑定事件、首启惰性创建今日待办）、4 视图路由（`handleHashChange` / `switchTo` / `writeHash`）、`renderSidebar`、`renderListView`、`renderAllView`、`renderDoneView`、`renderTemplatesView`（路由解析后始终渲染）、`onCreateList` / `startRenameList` / `onDeleteList`、`onAddItem` / `onToggleItem` / `onDeleteItem` / `startEditItem` / 拖拽事件、`resizeAddItemInput`（测量添加事项输入框文本宽度，仅超出 480px 基准时同步扩展 `width` 与 `flex-basis`）、`onSaveAsTemplate` / `onUseTemplate` / `onCopyTemplateToCurrentList` / `onDeleteTemplate` / `makeTemplateCard` | manager.html `<script>` 引入（位于 manager.js 之前）；通过 `window.__managerBridge` 复用 manager 的 toast / confirm / edit 弹窗 |
 | 待办数据层（v1.0.0） | `utils/todo-storage.js` | 纯函数 + storage Promise：`generateUUID`、`normalizeListName`、`getOrCreateList`、`getOrCreateTodayList`、`getLists`、`createList`、`renameList`、`deleteList`、`getItems`、`saveItems`、`addItem`、`toggleItem`、`deleteItem`、`sortItems`、`loadTemplates`、`saveAsTemplate`、`createListFromTemplate`、`copyTemplateToList`、`deleteTemplate` | manager/todo.js（全部 CRUD 调用）；tests/todo-storage.test.js（36 例） |
@@ -388,7 +389,7 @@
 
 ### 8.6 包管理脚本
 
-- `package.json`：`version` 1.0.1；scripts `test`（`vitest run`）、`test:watch`；devDependencies 仅 `vitest ^4.1.10`。
+- `package.json`：`version` 1.0.2；scripts `test`（`vitest run`）、`test:watch`；devDependencies 仅 `vitest ^4.1.10`。
 - `design/package.json` scripts：`icons`（`node make-icons.js`）、`preview`；依赖 `sharp ^0.35.3`（仅图标生成用，不在扩展运行时）。
 
 ### 8.7 待办运行时配置（v1.0.0）
@@ -405,6 +406,14 @@
 ---
 
 ## 9. 版本与变更
+
+### v1.0.2 — 修复 toast 圆角外灰色直角背景（2026-08-16）
+
+- 版本号：`manifest.json` / `package.json` 均为 **1.0.2**（上一版 1.0.1）。
+- **根因**：内容页 toast 宿主 `#text-collector-toast-host` 同时写了 `overflow: hidden !important` 与 `contain: layout style paint !important`（内联 cssText 与 `content.css` 双源）；宿主尺寸（`width/height: max-content`）恰好等于 `.toast` 本体，paint 包含 / overflow 裁剪把 `.toast` 自身的 `box-shadow`（`0 12px 32px` 等柔影）切在宿主盒内，圆角外四角残留阴影，视觉上形成「圆角矩形外一层灰色直角矩形背景」。
+- **修复**：宿主移除 `overflow: hidden`、`contain` 改为 `layout style`（保留布局/样式隔离、去掉绘制裁剪）；`content/content.js` 内联 cssText 与 `content/content.css` 双源同步修改并补注释警告。
+- **测试**：`tests/content.test.js` 新增「Toast 宿主样式契约」5 例（宿主不得 `overflow: hidden`；`contain` 不含 `paint`/`strict`/`content`；`clip`/`clip-path` 安全值；双源属性集逐项一致；几何钉死不回退）；content 39 → **44**，总数 100 → **105**，`npm test` 全部通过。
+- **无变化**：采集链路、存储键、管理页功能、待办功能、manifest 权限。
 
 ### v1.0.1 — 待办工作台布局微调（2026-08-15）
 

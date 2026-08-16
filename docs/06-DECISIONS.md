@@ -1,6 +1,6 @@
 # 技术决策记录 — 网页文字采集器
 
-> 依据：代码注释（决策意图大多写在源码注释里）、`docs/_facts.md`、当前 README「配置」部分。版本基线：v1.0.1（待办工作台布局微调，2026-08-15）。
+> 依据：代码注释（决策意图大多写在源码注释里）、`docs/_facts.md`、当前 README「配置」部分。版本基线：v1.0.2（修复 toast 圆角外灰色直角背景，2026-08-16）。
 > 禁止参考 `docs/archive/`。每条决策均标注「已知（代码注释/配置直接写明）」或「推断」。
 > 无法从代码确定的决策列于文末「待确认问题清单」。
 
@@ -65,7 +65,7 @@
 
 - **决策**：宿主 `#text-collector-toast-host` 用内联 `!important` 属性集 + `content.css` 双保险；可见 UI 全在 closed Shadow DOM。
 - **背景（已知）**：注释：「修复『选中文字后全屏乱码』」——宿主被页面 CSS（`div{position:fixed;inset:0}`、`div::before` iconfont）污染；「属性集必须与 content.css 保持一致，防止 content.css 因 CSP/扩展加载异常未生效时出现属性漂移」。
-- **影响**：页面样式无法污染 toast；代价是两处样式需手动同步（代码注释明确要求）。
+- **影响**：页面样式无法污染 toast；代价是两处样式需手动同步（代码注释明确要求；另有回归用例断言两源一致，见 B8）。
 - **置信度：高**。
 
 ### B2. 决策：Shadow DOM 内禁止 `* { all: initial }`
@@ -109,6 +109,13 @@
 - **背景（已知）**：注释：「跳过页面加载初期的 selection 恢复（浏览器会恢复上次的选区）」。
 - **影响**：避免刷新页面时把浏览器恢复的旧选区误存为新记录。
 - **置信度：高**。
+
+### B8. 决策：toast 宿主不裁剪子元素绘制（无 `overflow: hidden`，`contain` 不含 `paint`）
+
+- **决策**：宿主 `#text-collector-toast-host` 不声明 `overflow: hidden`，`contain` 仅保留 `layout style`（不含 `paint`）；内联 cssText 与 `content.css` 双源均遵守。
+- **背景（已知）**：v1.0.1 及更早版本宿主同时写了 `overflow: hidden !important` 与 `contain: layout style paint !important`；宿主尺寸（`width/height: max-content`）恰好等于 `.toast` 本体，paint 包含 / overflow 裁剪把 `.toast` 自身的 `box-shadow`（`0 12px 32px` 柔影）全部切在宿主盒内、只剩圆角外四角残留，视觉上形成「圆角矩形外面套一层灰色直角矩形背景」（2026-08-16 修复）。注释：「paint 包含会把 toast 的 box-shadow 裁剪到宿主盒内，圆角外的角落会残留灰色阴影」。
+- **影响**：toast 阴影恢复为设计预期的自然柔光；宿主的页面 CSS 防御不受影响（几何/层级/背景钉死与伪元素屏蔽由其余属性保证，与裁剪属性无关）；约束由 `tests/content.test.js`「Toast 宿主样式契约」5 例固化——宿主不得 `overflow: hidden` / `contain` 含 `paint`，且两源属性集逐项一致（防 B1 所述双源漂移再次引入裁剪）。
+- **置信度：高**（代码注释 + 回归用例 + 像素级前后截图对比可证；污染页面防御场景与深色模式已验证不回归）。
 
 ---
 

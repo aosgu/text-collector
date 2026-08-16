@@ -134,7 +134,7 @@ text-collector/
 ├── manifest.json          # MV3 配置（权限 / 快捷键 / 内容脚本声明）
 ├── content/
 │   ├── content.js         # 内容脚本：选区监听 + 准入规则 + Shadow DOM toast
-│   └── content.css        # toast 宿主钉死样式（与内联样式双保险）
+│   └── content.css        # toast 宿主钉死样式（与内联样式双保险；不裁剪子元素阴影）
 ├── manager/
 │   ├── manager.html       # 管理页（含 #collect 采集 tab 与 #todo 待办 tab）
 │   ├── manager.js         # 入口 / 编排 / 状态（listBridge）/ hash 路由
@@ -157,7 +157,7 @@ text-collector/
 └── tests/                 # vitest 单元测试（Node 环境）
 ```
 
-- 测试：`cd text-collector && npm install && npm test`（vitest，100 用例：storage 16 + content 39 + nav 9 + todo-storage 36）
+- 测试：`cd text-collector && npm install && npm test`（vitest，105 用例：storage 16 + content 44 + nav 9 + todo-storage 36）
 - 图标再生成：`cd design && npm install && npm run icons`（sharp 参数化生成）
 - 详细技术说明见上方「文档地图」
 
@@ -174,4 +174,4 @@ text-collector/
 
 [MIT](../LICENSE)
 
-当前版本 **v1.0.1**。变更日志见 [`docs/CHANGELOG.md`](../docs/CHANGELOG.md)；v0.7.2 及更早的版本历史见 [`docs/archive/legacy-notes.md`](../docs/archive/legacy-notes.md)（历史文档，仅供追溯）。
+当前版本 **v1.0.2**。变更日志见 [`docs/CHANGELOG.md`](../docs/CHANGELOG.md)；v0.7.2 及更早的版本历史见 [`docs/archive/legacy-notes.md`](../docs/archive/legacy-notes.md)（历史文档，仅供追溯）。
