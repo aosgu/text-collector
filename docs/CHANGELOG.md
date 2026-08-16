@@ -5,6 +5,31 @@
 
 ---
 
+## v1.0.2 — 修复 toast 圆角外灰色直角背景（2026-08-16）
+
+修复内容页采集 toast 的视觉 Bug：白色圆角卡片外围出现一层灰色直角矩形背景（本应透明）。本版本为纯样式修复，**不改变**采集链路、存储结构、扩展权限、管理页功能与待办功能。
+
+### 修复
+
+- **toast 圆角矩形外的灰色直角背景**（`content/content.css` + `content/content.js`）
+  - **根因**：宿主 `#text-collector-toast-host` 同时写了 `overflow: hidden !important` 与 `contain: layout style paint !important`；宿主尺寸（`width/height: max-content`）恰好等于 `.toast` 本体，paint 包含 / overflow 裁剪把 `.toast` 自身的 `box-shadow`（`0 12px 32px rgba(...)` 柔影）向外扩散的部分全部切掉，只剩包围盒内、圆角外四角残留的阴影，视觉上形成「圆角矩形外面套一层灰色直角矩形」；
+  - **修复**：宿主移除 `overflow: hidden`，`contain` 由 `layout style paint` 调整为 `layout style`（保留布局/样式隔离，去掉绘制裁剪）；内联 cssText 与 `content.css` 双源同步修改，并补充注释警告该约束；
+  - 修复后阴影恢复为设计预期的自然柔光（四周渐隐）；宿主的页面 CSS 防御（几何/层级钉死、透明背景、伪元素屏蔽）全部保留，不受影响。
+
+### 验证
+
+- 新增 `tests/content.test.js`「Toast 宿主样式契约」回归组 5 例：宿主不得 `overflow: hidden`、`contain` 不含 `paint`/`strict`/`content`、`clip`/`clip-path` 为安全值、inline cssText 与 content.css 属性集逐项一致（防双源漂移）、几何钉死属性不回退；
+- 负向验证：临时回灌 buggy 样式时该组 3 例准确失败，恢复后转绿；
+- 真机渲染验证：像素级前后对比——修复前阴影在宿主盒边界硬切断（toast 下方 32px 柔影完全缺失、角落灰色填充），修复后阴影自然渐隐、圆角外透明；恶意页面 CSS 污染场景下宿主几何钉死不回归；深色模式变体验证通过；
+- `npm test`：**4 个测试文件、105/105 用例通过**（content 39 → **44**）。
+
+### 影响面
+
+- 仅修改 `content/content.js`（宿主 inline 样式）与 `content/content.css`（宿主规则）；新增 `tests/content.test.js` 回归用例。
+- 管理页 toast（`manager/toast.js`）、采集准入、存储结构、manifest 权限**均无变化**。
+
+---
+
 ## v1.0.1 — 待办工作台布局微调（2026-08-15）
 
 本版本仅调整待办工作台的布局尺寸与添加事项输入框的宽度反馈，**不改变**待办数据模型、存储键、CRUD、模板、路由、扩展权限或采集功能。

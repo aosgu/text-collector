@@ -1,6 +1,6 @@
 # 技术架构 — 网页文字采集器
 
-> 依据：`docs/_facts.md` 与当前代码（v1.0.1，2026-08-15）。禁止参考 `docs/archive/`。
+> 依据：`docs/_facts.md` 与当前代码（v1.0.2，2026-08-16）。禁止参考 `docs/archive/`。
 > 所有结论均可回溯到具体文件；推断处标注。
 
 ---
@@ -87,7 +87,7 @@ flowchart TB
 | 存储工具层 | `text-collector/utils/storage.js` | 全部数据读写封装、`CONFIG` 常量、孤儿收领、去重/扩选、清空、导出读取、开关、估算 | 被注入到 content 与 manager 两份上下文（全局变量方式） |
 | 后台服务 | `text-collector/background/service-worker.js` | 安装初始化、badge、图标点击开页、快捷键 | SW（事件驱动，可休眠） |
 | 采集内容脚本 | `text-collector/content/content.js` | 选区监听、准入过滤、写库触发、页面内 toast | 每个匹配页面 |
-| 采集样式 | `text-collector/content/content.css` | toast 宿主钉死样式 | 注入页面 |
+| 采集样式 | `text-collector/content/content.css` | toast 宿主钉死样式；**不裁剪子元素绘制**（无 `overflow: hidden`、`contain` 不含 `paint`，v1.0.2） | 注入页面 |
 | 管理页入口 | `text-collector/manager/manager.js` | 初始化编排、全局状态（listBridge）、事件绑定、实时订阅、开关/清空/页签/导出菜单 | 管理页 |
 | 列表渲染 | `text-collector/manager/render.js` | 分页、卡片、删除/撤销、复制、收藏、编辑、错误态 | 管理页 |
 | 弹窗 | `text-collector/manager/modal.js` | `showConfirmModal` / `showEditModal`（自包含） | 管理页 |
@@ -98,7 +98,7 @@ flowchart TB
 | 待办 tab 入口（v1.0.0，v1.0.1 调整） | `text-collector/manager/todo.js` | 待办 tab 内部：四视图路由、render、事件、拖拽；`resizeAddItemInput` 在输入/提交清空后用 canvas 测量文字宽度，仅在超过 480px 基准时同步调整输入框 `width` 与 `flex-basis`；通过 `window.__managerBridge` 复用采集模块的 toast/confirm/edit | 管理页 |
 | 待办样式（v1.0.0，v1.0.1 调整） | `text-collector/manager/todo.css` | 待办模块样式：侧边栏、4 视图、拖拽视觉、响应式；`.todo-sidebar` 宽度为 300px 且不收缩，`.todo-content` 可收缩且内容内层最大宽度为 960px，`.todo-add-form input` 使用 `flex: 0 1 480px` + `width: 480px` 并可在窄容器收缩，添加按钮固定为 `flex: 0 0 28px`；命名空间 `todo-` 前缀避免与采集模块冲突；**复用** `manager.css` 的 `:root` CSS 变量 | 管理页 |
 | 管理页样式 | `text-collector/manager/manager.css` | 主题变量、卡片/菜单/弹窗样式、响应式、品牌 brand 区域 | 管理页 |
-| 测试 | `text-collector/tests/*` + `tests/helpers/load-source.js` | 纯函数单元测试（语法提取） | Node（vitest） |
+| 测试 | `text-collector/tests/*` + `tests/helpers/load-source.js` | 纯函数单元测试（语法提取）+ 源码级样式契约断言（v1.0.2，toast 宿主不裁剪） | Node（vitest） |
 | 图标工具 | `design/`（make-icons.js / icon-spec.js / preview.js / build-icon.js） | 参数化生成 `icons/icon16/48/128.png` | Node（开发期） |
 
 ## 4. 模块依赖关系
@@ -165,7 +165,7 @@ todo.js 依赖 manager.js 暴露的 `window.__managerBridge` 间接使用 toast/
 ```
 cd text-collector
 npm install        # 安装 vitest（devDependency）
-npm test           # vitest run（Node 环境，100 用例：storage 16 + content 39 + nav 9 + todo-storage 36）
+npm test           # vitest run（Node 环境，105 用例：storage 16 + content 44 + nav 9 + todo-storage 36）
 npm run test:watch # 监听模式
 ```
 

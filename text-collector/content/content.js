@@ -311,6 +311,8 @@ function removeToastHost() {
  * 1. 宿主位于 light DOM，必须用 inline !important + content.css 双重钉死几何与伪元素；
  * 2. 所有可见 UI 放进 closed Shadow DOM，样式绝不泄漏到页面，也不被页面污染；
  * 3. 禁止使用 `* { all: initial }`——会切断继承并清掉 SVG stroke，导致图标消失/文字异常。
+ * 4. 宿主绝不能裁剪子元素（overflow:hidden / contain 含 paint）：toast 的 box-shadow
+ *    会画出自身 border-box，一旦被宿主裁掉，圆角外的角落会残留灰色阴影块。
  *
  * @param {string} message    提示文案
  * @param {'success'|'info'|'danger'} [kind='success'] 状态徽标
@@ -338,7 +340,6 @@ function showToast(message, kind = 'success') {
     'border: none !important',
     'background: transparent !important',
     'box-shadow: none !important',
-    'overflow: hidden !important',
     'z-index: 2147483647 !important',
     'display: block !important',
     'pointer-events: none !important',
@@ -346,7 +347,10 @@ function showToast(message, kind = 'success') {
     'font-size: 0 !important',
     'line-height: 0 !important',
     'color: transparent !important',
-    'contain: layout style paint !important',
+    // 仅做 layout/style 隔离。绝不能加 paint（或 overflow:hidden）：
+    // paint 包含会把 toast 的 box-shadow 裁剪到宿主盒内，圆角外的角落会残留
+    // 灰色阴影，看起来像圆角矩形外面套了一层灰色直角矩形（见 content.test.js 回归用例）。
+    'contain: layout style !important',
     'isolation: isolate !important',
     'transform: none !important',
     'opacity: 1 !important',
@@ -356,6 +360,8 @@ function showToast(message, kind = 'success') {
   ].join(';');
   // 注：此处属性集必须与 content.css 中 #text-collector-toast-host 规则保持一致，
   // 防止 content.css 因 CSP/扩展加载异常未生效时出现属性漂移。
+  // 另注意：宿主不得裁剪子元素（overflow:hidden / contain 含 paint 都会裁掉
+  // toast 的 box-shadow，圆角外出现灰色直角块），回归用例见 content.test.js。
 
   let shadow;
   try {

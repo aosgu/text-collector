@@ -6,6 +6,9 @@
  *   - `div { position:fixed; inset:0 }` → 全屏遮罩
  *   - `div::before { content; font-family: iconfont }` → 全屏乱码/图标字符
  * 因此这里必须用高优先级规则把宿主「钉死」成右上角透明小容器。
+ * 但注意：宿主绝不能裁剪子元素（overflow:hidden / contain 含 paint）——
+ * toast 的 box-shadow 会画出自身 border-box，被裁掉后圆角外会残留灰色阴影块。
+ * 本文件属性集必须与 content.js 中 host.style.cssText 保持逐项一致（有回归用例）。
  */
 
 #text-collector-toast-host {
@@ -25,7 +28,6 @@
   border: none !important;
   background: transparent !important;
   box-shadow: none !important;
-  overflow: hidden !important;
   /* 层级与交互 */
   z-index: 2147483647 !important;
   display: block !important;
@@ -35,8 +37,10 @@
   font-size: 0 !important;
   line-height: 0 !important;
   color: transparent !important;
-  /* 布局隔离，降低页面 reflow 影响 */
-  contain: layout style paint !important;
+  /* 布局/样式隔离，降低页面 reflow 影响。
+     注意：contain 绝不能加 paint，也不能配合 overflow:hidden——
+     那会把 toast 的 box-shadow 裁剪到宿主盒内，圆角外残留灰色直角块。 */
+  contain: layout style !important;
   isolation: isolate !important;
   transform: none !important;
   opacity: 1 !important;

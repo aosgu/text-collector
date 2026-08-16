@@ -14,6 +14,7 @@ import { describe, it, expect } from 'vitest';
 import { readSource, extractFunction, extractObjectLiteral } from './helpers/load-source.js';
 
 const contentSource = readSource('content/content.js');
+const contentCssSource = readSource('content/content.css');
 const storageSource = readSource('utils/storage.js');
 
 // 注入与 storage.js 顶层 CONFIG 同源的真实常量（当前为 5 / 3），避免测试里硬编码漂移
@@ -280,6 +281,115 @@ describe('truncateText（UTF-16 code unit 截断，绝不在代理对中间切�
           expect(last < 0xD800 || last > 0xDBFF).toBe(true);
         }
       }
+    }
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════
+// Toast 宿主样式契约（回归：圆角矩形外灰色直角背景 bug）
+//
+// 历史 Bug：toast 是 10px 圆角的白色卡片，但宿主 #text-collector-toast-host
+// 同时写了 `overflow: hidden !important` 与 `contain: layout style paint !important`。
+// paint 包含（contain:paint）/ overflow:hidden 会把子元素绘制裁剪到宿主盒内，
+// toast 的 box-shadow（0 12px 32px 深色模糊）被裁成与宿主等大的直角矩形灰底，
+// 在圆角三角形缺口处露出灰色，视觉上就是"圆角矩形外面套了一层灰色直角矩形"。
+// 修复 = 宿主去掉 overflow:hidden、contain 去掉 paint（保留 layout style）。
+//
+// 本文件其余用例提取纯函数运行；宿主样式不是函数，而是内联 cssText 数组与
+// content.css 规则两份"事实"。这里做源码级静态提取（不执行浏览器代码），断言：
+//   1) 两处都不得声明 overflow: hidden（会裁掉 toast 阴影）；
+//   2) 两处 contain 都不得含 paint/strict/content（同样裁剪子元素绘制）;
+//   3) 两处属性集保持同步（项目契约：inline 与 css 双源一致，防漂移）。
+// ══════════════════════════════════════════════════════════════════════
+
+/** 提取 content.js 中 host.style.cssText = [...] 数组里的全部声明字符串 */
+function extractHostInlineDecls(source) {
+  const m = source.match(/host\.style\.cssText\s*=\s*\[([\s\S]*?)\]\.join\(';'\)/);
+  if (!m) throw new Error('[test] 未找到 host.style.cssText = [...] 数组');
+  const decls = [];
+  const re = /'([^']*)'/g;
+  let mm;
+  while ((mm = re.exec(m[1])) !== null) decls.push(mm[1]);
+  if (decls.length === 0) throw new Error('[test] cssText 数组为空');
+  return decls;
+}
+
+/** 提取 content.css 中 #text-collector-toast-host { ... } 主规则（排除 ::before/::after） */
+function extractHostCssRule(source) {
+  const m = source.match(/#text-collector-toast-host\s*\{([^}]*)\}/);
+  if (!m) throw new Error('[test] 未找到 #text-collector-toast-host 规则');
+  return m[1].replace(/\/\*[\s\S]*?\*\//g, ''); // 去掉注释
+}
+
+/** 把声明列表解析为 { 属性: 值 }（剥离 !important、分号、首尾空白，属性小写） */
+function parseDecls(decls) {
+  const out = {};
+  for (const d of decls) {
+    const idx = d.indexOf(':');
+    if (idx === -1) continue;
+    const prop = d.slice(0, idx).trim().toLowerCase();
+    const val = d.slice(idx + 1)
+      .replace(/!important/g, '')
+      .replace(/;+$/, '')
+      .trim()
+      .replace(/\s+/g, ' ');
+    out[prop] = val;
+  }
+  return out;
+}
+
+/** contain 值是否引入"绘制裁剪"（paint / strict / content 均会裁剪子元素绘制） */
+function containClipsPaint(value) {
+  if (!value) return false;
+  const tokens = value.toLowerCase().split(/\s+/);
+  if (tokens.includes('paint') || tokens.includes('strict') || tokens.includes('content')) {
+    return true;
+  }
+  return false;
+}
+
+describe('Toast 宿主样式契约（圆角外灰色直角背景 bug 回归）', () => {
+  const inlineDecls = extractHostInlineDecls(contentSource);
+  const inlineStyle = parseDecls(inlineDecls);
+  const cssRuleBody = extractHostCssRule(contentCssSource);
+  const cssStyle = parseDecls(cssRuleBody.split(';').map(s => s.trim()).filter(Boolean));
+
+  it('宿主不得声明 overflow:hidden —— 会裁掉 toast 的 box-shadow', () => {
+    expect(inlineStyle.overflow ?? '').not.toBe('hidden');
+    expect(cssStyle.overflow ?? '').not.toBe('hidden');
+  });
+
+  it('宿主 contain 不得包含绘制裁剪（paint / strict / content）', () => {
+    expect(containClipsPaint(inlineStyle.contain)).toBe(false);
+    expect(containClipsPaint(cssStyle.contain)).toBe(false);
+  });
+
+  it('clip / clip-path 不得主动裁剪宿主', () => {
+    // clip:auto 与 clip-path:none 是不裁剪的安全值
+    const safeClip = (v) => !v || v === 'auto' || v === 'none';
+    expect(safeClip(inlineStyle.clip)).toBe(true);
+    expect(safeClip(inlineStyle['clip-path'])).toBe(true);
+    expect(safeClip(cssStyle.clip)).toBe(true);
+    expect(safeClip(cssStyle['clip-path'])).toBe(true);
+  });
+
+  it('inline cssText 与 content.css 宿主规则属性集保持同步（防双源漂移）', () => {
+    const inlineKeys = Object.keys(inlineStyle).sort();
+    const cssKeys = Object.keys(cssStyle).sort();
+    expect(inlineKeys).toEqual(cssKeys);
+    for (const k of cssKeys) {
+      expect(inlineStyle[k], `属性 ${k} 在 inline 与 css 中不一致`).toBe(cssStyle[k]);
+    }
+  });
+
+  it('宿主几何仍被钉死在右上角小容器（防止防御回退）', () => {
+    for (const style of [inlineStyle, cssStyle]) {
+      expect(style.position).toBe('fixed');
+      expect(style.top).toBe('16px');
+      expect(style.right).toBe('16px');
+      expect(style['z-index']).toBe('2147483647');
+      expect(style.background).toBe('transparent');
+      expect(style['pointer-events']).toBe('none');
     }
   });
 });

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "网页文字采集器",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "选中文字自动保存到采集页；待办清单在同一个页面内通过顶部 Tab 切换",
   "permissions": [
     "storage",

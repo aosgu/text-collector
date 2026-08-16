@@ -1,6 +1,6 @@
 # 产品文档 — 网页文字采集器（Chrome 扩展）
 
-> 依据：`docs/_facts.md`（代码事实清单）及当前代码快照（v1.0.1，2026-08-15）。
+> 依据：`docs/_facts.md`（代码事实清单）及当前代码快照（v1.0.2，2026-08-16）。
 > 本文件只描述代码中可证明存在的产品事实，不参考 `docs/archive/`。
 > 置信度：**高** = 代码直接证明；**中** = 由代码/注释推断；**低** = 推测。
 
@@ -57,7 +57,7 @@
 | 17 | 打开/聚焦管理页 | `background/service-worker.js` | 图标点击：已开则聚焦，未开则新开 |
 | 18 | 键盘可达与无障碍 | `render.js` / `modal.js` / `manager.js` | Tab 导航、焦点陷阱、aria 属性 |
 | 19 | 响应式与减弱动效 | `manager/manager.css` | ≤640px 布局调整、`prefers-reduced-motion` |
-| 20 | 单元测试 | `tests/`（vitest，100 用例） | 纯函数在 Node 环境验证 |
+| 20 | 单元测试 | `tests/`（vitest，105 用例） | 纯函数在 Node 环境验证（含 toast 宿主样式契约静态断言） |
 | 21 | 网站导航（v0.8.0 新增） | `manager/nav.js` + `config/nav.json`（头部 `#btn-nav`） | hover 展开分栏快捷方式面板，新标签页打开；配置文件驱动，无效配置时图标隐藏 |
 | 22 | 主视图顶 Tab 切换（v1.0.0） | `manager.html` 顶部 `.brand-name` 内 `<a href="#collect">` / `<a href="#todo">` | URL hash 路由：`#collect`（默认）= 采集 tab，`#todo[/...]` = 待办 tab；点图标默认进采集 |
 | 23 | 待办：清单 CRUD（v1.0.0） | `manager/todo.js` 侧边栏 + `utils/todo-storage.js` | 创建（自动 order）/ 重命名（双击 / F2 / Enter）/ 删除（**仅**工作台顶部按钮，二次确认） |
@@ -67,6 +67,8 @@
 | 27 | 待办：首启惰性创建「今日待办」（v1.0.0） | `utils/todo-storage.js` `getOrCreateTodayList` | 首次进入待办 tab 时创建并写 `todo_today_list_id`；后续幂等，删后自动重建 |
 
 > **v1.0.1 界面微调**：待办左侧边栏由 240px 调整为 **300px**，以增加清单区可读空间；工作台添加事项输入框保持 **480px** 的稳定弹性基准，容器不足时可收缩，容器宽裕时不无意义拉伸，只有输入内容超过基准时才按文字宽度扩展。此版本不改变任何存储、路由、权限或待办操作语义。
+
+> **v1.0.2 视觉修复**：修复内容页采集 toast 圆角矩形外出现灰色直角背景的问题（宿主样式裁剪了 toast 自身阴影所致，见 `docs/06-DECISIONS.md` B8）。交互、功能与数据均无变化。
 
 ## 非目标（明确不做什么）
 

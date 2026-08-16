@@ -2,7 +2,7 @@
 
 > 对照基准：
 > - 旧文档：`docs/archive/original-PRD.md`（PRD v0.5，2026-08-10）、`docs/archive/legacy-notes.md`（README 版本历史 v0.5–v0.7.2 等）
-> - 当前代码：v1.0.1 工作区快照，2026-08-15（以 `docs/_facts.md` 为当前事实源）
+> - 当前代码：v1.0.2 工作区快照，2026-08-16（以 `docs/_facts.md` 为当前事实源）
 > - 用途：只做旧 PRD / 旧 README 与当前代码的差异对照；本报告不替代 docs/01~07 的现行规格。
 > 证据格式：`文件:位置` 或 grep 结论。
 
@@ -169,7 +169,7 @@
 | 图标更换（品牌蓝圆角方 + 无衬线开引号） | `icons/*.png` + `design/` 参数化工具链（sharp） | v0.7.2 |
 | 响应式布局 `@media (max-width: 640px)`（含触摸设备删除按钮常驻） | `manager.css` L752 | 迭代新增（PRD v0.4 曾将移动端适配移至 P2；当前以响应式 CSS 形态部分落地） |
 | `prefers-reduced-motion` 减弱动效 | `manager.css` L776 | 迭代新增 |
-| 测试体系（vitest + 语法提取纯函数，100 用例） | `tests/` + `vitest.config.js` + `package.json` | 迭代新增（PRD 无测试相关内容；v0.8.0 起含 nav 9 例，v1.0.0 增 todo-storage 36 例） |
+| 测试体系（vitest + 语法提取纯函数，105 用例） | `tests/` + `vitest.config.js` + `package.json` | 迭代新增（PRD 无测试相关内容；v0.8.0 起含 nav 9 例，v1.0.0 增 todo-storage 36 例，v1.0.2 增 toast 宿主样式契约 5 例） |
 | 删除撤销时 `ignoreAllOrderChanges` 抑制 onChanged | `manager.js` | 迭代新增 |
 | `listBridge` 状态通道（状态修改收敛命名函数） | `manager.js` 头部约定 | 模块拆分时新增 |
 | 管理页模块拆分（render/toast/modal/export 独立文件） | `manager/` 目录结构（PRD §4.3 仅 manager.js 单文件） | 迭代新增 |
