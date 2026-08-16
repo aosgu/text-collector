@@ -3,8 +3,7 @@
     {
       "title": "常用",
       "links": [
-        { "name": "Gmail", "url": "https://mail.google.com" },
-        { "name": "GitHub", "url": "https://github.com" },
+        { "name": "Xiaohongshu", "url": "https://www.xiaohongshu.com/" },
         { "name": "YouTube", "url": "https://www.youtube.com" },
         { "name": "X / Twitter", "url": "https://x.com" }
       ]
@@ -12,16 +11,21 @@
     {
       "title": "开发",
       "links": [
-        { "name": "MDN", "url": "https://developer.mozilla.org" },
-        { "name": "Chrome 扩展文档", "url": "https://developer.chrome.com/docs/extensions" },
-        { "name": "Vitest", "url": "https://vitest.dev" }
+        { "name": "Arena", "url": "https://arena.ai/" },
+        { "name": "Claude", "url": "https://claude.ai/" },
+        { "name": "ChatGPT", "url": "https://chatgpt.com/" },
+        { "name": "Gemini", "url": "https://gemini.google.com/app" },
+        { "name": "Qianwen", "url": "https://www.qianwen.com/" },        
+        { "name": "Qwenwork", "url": "https://qwenwork.cn/" },  
+        { "name": "Manus", "url": "https://manus.im/" }
       ]
     },
     {
       "title": "阅读",
       "links": [
         { "name": "Hacker News", "url": "https://news.ycombinator.com" },
-        { "name": "V2EX", "url": "https://www.v2ex.com" }
+        { "name": "Techmeme", "url": "https://www.techmeme.com/" },
+        { "name": "Marginal", "url": "https://marginalrevolution.com/" }
       ]
     }
   ]
