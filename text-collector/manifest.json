@@ -1,12 +1,14 @@
 {
   "manifest_version": 3,
   "name": "网页文字采集器",
-  "version": "1.0.2",
-  "description": "选中文字自动保存到采集页；待办清单在同一个页面内通过顶部 Tab 切换",
+  "version": "1.1.0",
+  "description": "选中文字自动保存到采集页；右键导出 Arena 对话为 Markdown；待办清单同页 Tab 切换",
   "permissions": [
     "storage",
     "unlimitedStorage",
-    "tabs"
+    "tabs",
+    "contextMenus",
+    "scripting"
   ],
   "host_permissions": [
     "<all_urls>"
@@ -26,6 +28,12 @@
       "matches": ["<all_urls>"],
       "js": ["utils/storage.js", "content/content.js"],
       "css": ["content/content.css"],
+      "run_at": "document_idle",
+      "all_frames": false
+    },
+    {
+      "matches": ["https://arena.ai/c/*", "https://lmarena.ai/c/*"],
+      "js": ["content/arena-exporter.js"],
       "run_at": "document_idle",
       "all_frames": false
     }

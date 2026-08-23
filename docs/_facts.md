@@ -1,7 +1,8 @@
 # 代码事实清单 — text-collector
 
-> 生成方式：对当前代码快照（v1.0.2，2026-08-16）的源码逐文件扫描，仅记录代码中可证明存在的内容。
+> 生成方式：对当前代码快照（v1.1.0，2026-08-23）的源码逐文件扫描，仅记录代码中可证明存在的内容。
 > 修订记录：
+> - 2026-08-23（v1.1.0）— 合并 Arena 对话导出：新增 `content/arena-exporter.js`（manifest 第二个 content_scripts 条目，仅注入 `arena.ai/c/*`、`lmarena.ai/c/*`）与右键菜单「Arena 对话导出」（SW `contextMenus` 注册 + `tabs.sendMessage` 触发 + `scripting` 补注入兜底；消息类型 `EXPORT_ARENA_MD`）；manifest permissions 新增 `contextMenus`、`scripting`。本版事实更新：§1 内容脚本、§2 模块表（SW / arena-exporter / 测试行）、§3.2 浏览器操作表、§5.1/5.2 接口（首次出现 runtime 消息通信）、§7 权限、§8.6 测试计数、§9 版本变更。
 > - 2026-08-16（v1.0.2）— 修复内容页 toast 圆角矩形外的灰色直角背景：`content/content.js` 与 `content/content.css` 中宿主 `#text-collector-toast-host` 移除 `overflow: hidden !important`、`contain` 由 `layout style paint` 调整为 `layout style`（paint 包含/overflow 会把 `.toast` 的 box-shadow 裁剪到宿主盒内，圆角外残留阴影形成灰色直角矩形）；新增「Toast 宿主样式契约」回归用例 5 例（content 39 → 44，总数 100 → **105**）；版本号同步至 1.0.2（manifest.json / package.json）。
 > - 2026-08-15（v1.0.1）— 待办工作台布局微调及修复：`manager/todo.css` 将 `.todo-sidebar` 桌面宽度调整为 300px；`.todo-content` 使用 `flex: 1 1 0` + `min-width: 0`，`.todo-content-inner` 的最大宽度为 960px，以提供输入框可见扩展空间；`.todo-add-form input` 采用 `flex: 0 1 480px` + `width: 480px`，在窄容器中可收缩、在可用空间充足时不因剩余空间继续拉伸。添加按钮固定为 `flex: 0 0 28px`，并以 `margin-left: auto` 锚定至整行表单最右端，不被挤压变形。`manager/todo.js` 的 `resizeAddItemInput` 输入和提交清空后按文本测量结果**同步更新 `width` 与 `flex-basis`**，仅当内容所需宽度超过 480px 时扩展。`manager.js` 在主路由进入 `#todo` 时转交给 `TodoApp.handleHashChange()`；待办模块在路由解析后无条件渲染侧边栏和内容区，确保直接打开 `manager.html#todo` 不会白屏。
 > - 2026-08-12 — 根据用户确认，将「导入功能」状态由「待确认（无证据）」更正为「已删除」（见 §4.3）。
@@ -39,7 +40,7 @@
 
 > 采集 tab 与待办 tab 由 manager.js 切主视图（`.hidden` 切换 `#view-collect` / `#view-todo`、置灰采集开关、隐藏/显示 toolbar 计数与导出按钮）；待办内 4 视图由 todo.js 根据 `location.hash` 段切 `state.currentView` 与 `state.currentListId`，URL 与 `state` 双向同步（`writeHash`）。
 
-内容脚本（非页面）：`content/content.js` + `content/content.css` 由 `manifest.json` 声明注入到 `<all_urls>` 匹配的所有页面（`run_at: document_idle`，`all_frames: false`），在宿主页面内渲染 toast（closed Shadow DOM）。
+内容脚本（非页面）：`content/content.js` + `content/content.css` 由 `manifest.json` 声明注入到 `<all_urls>` 匹配的所有页面（`run_at: document_idle`，`all_frames: false`），在宿主页面内渲染 toast（closed Shadow DOM）。另有一个独立内容脚本 `content/arena-exporter.js`，仅注入 `https://arena.ai/c/*`、`https://lmarena.ai/c/*`（对话页），由右键菜单触发，见 §2「Arena 对话导出」行。
 
 ---
 
@@ -48,7 +49,8 @@
 | 模块 | 位置 | 对外提供的能力（函数/常量） | 被谁调用 |
 |------|------|------------------------------|----------|
 | 存储工具层 | `utils/storage.js` | `CONFIG` 常量、`SCHEMA_VERSION=1`、`generateUUID`、`getUrlKey`、`getDomain`、`adoptOrphanSnippets`、`addSnippet`、`deleteSnippet`、`filterOrderRecords`、`getFilteredOrder`、`clearAllSnippets`、`getSnippets`、`getAllSnippets`、`toggleFavoriteSnippet`、`updateSnippetText`、`getCollectEnabled`、`setCollectEnabled`、`getEarliestDate`、`getStorageEstimate` | content.js（addSnippet）、manager.js（adoptOrphanSnippets/getCollectEnabled/setCollectEnabled/getEarliestDate/clearAllSnippets/filterOrderRecords/getFilteredOrder）、render.js（getSnippets/getStorageEstimate/deleteSnippet/toggleFavoriteSnippet/updateSnippetText）、export.js（getAllSnippets）、service-worker.js（get/set collectEnabled）、tests（getUrlKey/getDomain/filterOrderRecords/CONFIG） |
-| 后台 Service Worker | `background/service-worker.js` | `updateBadge`；监听 `onInstalled`（初始化 `schemaVersion`/`collectEnabled`）、`onStartup`、顶层读 storage 兜底同步 badge、`action.onClicked`（打开/聚焦待办页面）、`commands.onCommand('toggle-collect')`、`storage.onChanged` | 由浏览器事件驱动；管理页/内容脚本不直接调用 |
+| 后台 Service Worker | `background/service-worker.js` | `updateBadge`、`ARENA_PAGE_URL` 正则；监听 `onInstalled`（初始化 `schemaVersion`/`collectEnabled` + `contextMenus.removeAll`/`create` 注册「Arena 对话导出」，`documentUrlPatterns` 限 `/c/` 对话页）、`onStartup`、顶层读 storage 兜底同步 badge、`action.onClicked`（打开/聚焦待办页面）、`commands.onCommand('toggle-collect')`、`storage.onChanged`、`contextMenus.onClicked`（URL 兜底校验 → `tabs.sendMessage('EXPORT_ARENA_MD')`，失败时 `scripting.executeScript` 补注入 arena-exporter.js 后重发） | 由浏览器事件驱动；管理页/内容脚本不直接调用 |
+| Arena 对话导出（内容脚本，v1.1.0） | `content/arena-exporter.js` | IIFE（`window.__arenaMdExporterLoaded` 防重复注册）；`inlineMd`/`emitBlock`/`listMd`/`blockMd`（DOM→Markdown，含嵌套列表/代码围栏/转义）、`textWithBreaks`、`cleanTitle`（按序号锚定剥引用来源标题前缀）、`extractCard`/`extractConversation`（arena.ai Battle Mode DOM 提取）、`buildMarkdown`（组装 + 文件名）、`download`（blob 下载）、`notify`（优先复用 content.js 全局 `showToast`，缺省退回简易 toast）、`exportNow`；监听 `chrome.runtime.onMessage`（`EXPORT_ARENA_MD`）；暴露调试钩子 `window.__arenaExport` | service-worker.js（右键菜单点击经 sendMessage 触发）；tests/arena-exporter.test.js（cleanTitle） |
 | 采集（内容脚本） | `content/content.js` | `processSelection`（准入规则→写库→toast）、`meetsLengthThreshold`、`isPureSymbol`、`isPureNumber`、`isPureURL`、`getActiveElement`、`isEditableElement`、`isSelectionInEditable`、`truncateText`、`detectDarkSurrounding`、`showToast`、`removeToastHost`；监听 `selectionchange`（500ms 防抖）与 `chrome.storage.onChanged` | 由页面事件驱动；`addSnippet` 来自 storage.js |
 | 内容脚本样式 | `content/content.css` | 钉死 toast 宿主 `#text-collector-toast-host` 的几何/层级/伪元素；**不裁剪子元素绘制**（无 `overflow: hidden`、`contain` 不含 `paint`，v1.0.2——避免裁掉 toast 自身 box-shadow 造成圆角外灰色直角块） | 由 manifest 注入所有页面 |
 | 管理页入口/编排 | `manager/manager.js` | `init`（adoptOrphanSnippets→renderToggle→loadFirstPage→setupListeners）、开关渲染/切换、清空确认、页签切换、导出菜单、storage 实时订阅（新记录 prepend + 提示条）、`listBridge` 状态通道；主路由进入 `#todo` 时转交 `TodoApp.handleHashChange()` | manager.html `<script>` 引入 |
@@ -58,7 +60,7 @@
 | 管理页 Toast | `manager/toast.js` | `showToast`（单实例，kind: success/info/danger，可带操作按钮）、`dismiss`；`ICON_BOOKMARK_OUTLINE`/`ICON_BOOKMARK_SOLID`/`ICON_TRASH`/`ICON_CHECK`/`ICON_INFO`/`ICON_ALERT` 常量 | render.js、export.js、manager.js |
 | 导出 | `manager/export.js` | `handleExport(format)`（TXT 带 UTF-8 BOM / JSON 含 schemaVersion）、`downloadBlob` | manager.js（导出菜单项点击） |
 | 管理页样式 | `manager/manager.css` | 全部视觉样式 + `:root` CSS 变量（主题色板） | manager.html `<link>` 引入 |
-| 单元测试 | `tests/storage.test.js`、`tests/content.test.js`、`tests/nav.test.js`、`tests/todo-storage.test.js`、`tests/helpers/load-source.js` | 用语法提取纯函数（`extractFunction`/`extractObjectLiteral`）在 Node 环境运行 vitest；storage 16 + content 44（含 v1.0.2 新增「Toast 宿主样式契约」5 例：对 `content.js` cssText 数组与 `content.css` 宿主规则做源码级静态断言）+ nav 9 + todo-storage 36 = **105** 个用例 | `npm test`（vitest，见 `package.json`/`vitest.config.js`，environment: node） |
+| 单元测试 | `tests/storage.test.js`、`tests/content.test.js`、`tests/nav.test.js`、`tests/todo-storage.test.js`、`tests/arena-exporter.test.js`、`tests/helpers/load-source.js` | 用语法提取纯函数（`extractFunction`/`extractObjectLiteral`）在 Node 环境运行 vitest；storage 16 + content 44（含 v1.0.2 新增「Toast 宿主样式契约」5 例：对 `content.js` cssText 数组与 `content.css` 宿主规则做源码级静态断言）+ nav 9 + todo-storage 36 + arena-exporter 5（cleanTitle 序号锚定剥离）= **110** 个用例 | `npm test`（vitest，见 `package.json`/`vitest.config.js`，environment: node） |
 | 图标生成工具（开发期，非运行时） | `design/`（`make-icons.js`、`icon-spec.js`、`preview.js`、`build-icon.js` 等） | 参数化生成 `icons/icon16/48/128.png`（依赖 sharp） | `design/package.json` 脚本 `npm run icons` / `npm run preview`；产物被 manifest 引用，工具本身不进扩展包 |
 | 待办 tab 入口（v1.0.0，v1.0.1 调整） | `manager/todo.js` | `init`（加载数据、设置监听、绑定事件、首启惰性创建今日待办）、4 视图路由（`handleHashChange` / `switchTo` / `writeHash`）、`renderSidebar`、`renderListView`、`renderAllView`、`renderDoneView`、`renderTemplatesView`（路由解析后始终渲染）、`onCreateList` / `startRenameList` / `onDeleteList`、`onAddItem` / `onToggleItem` / `onDeleteItem` / `startEditItem` / 拖拽事件、`resizeAddItemInput`（测量添加事项输入框文本宽度，仅超出 480px 基准时同步扩展 `width` 与 `flex-basis`）、`onSaveAsTemplate` / `onUseTemplate` / `onCopyTemplateToCurrentList` / `onDeleteTemplate` / `makeTemplateCard` | manager.html `<script>` 引入（位于 manager.js 之前）；通过 `window.__managerBridge` 复用 manager 的 toast / confirm / edit 弹窗 |
 | 待办数据层（v1.0.0） | `utils/todo-storage.js` | 纯函数 + storage Promise：`generateUUID`、`normalizeListName`、`getOrCreateList`、`getOrCreateTodayList`、`getLists`、`createList`、`renameList`、`deleteList`、`getItems`、`saveItems`、`addItem`、`toggleItem`、`deleteItem`、`sortItems`、`loadTemplates`、`saveAsTemplate`、`createListFromTemplate`、`copyTemplateToList`、`deleteTemplate` | manager/todo.js（全部 CRUD 调用）；tests/todo-storage.test.js（36 例） |
@@ -101,6 +103,7 @@
 |------|------|------|------|------|
 | 点击工具栏插件图标 | `chrome.action.onClicked`：待办页面已打开则 `tabs.update` 激活 + `windows.update` 聚焦，否则 `tabs.create` 新开 | 待办页面打开/聚焦 | — | service-worker.js |
 | 快捷键 `Ctrl+Shift+S`（manifest `commands.toggle-collect`） | 切换 `collectEnabled` 并刷新 badge | badge 变化（开启无 badge；关闭显示灰色 `OFF`） | — | manifest.json；service-worker.js |
+| arena.ai / lmarena.ai 对话页（`/c/` 路径）右键 →「Arena 对话导出」（v1.1.0） | `contextMenus.onClicked` → URL 兜底校验 → `tabs.sendMessage('EXPORT_ARENA_MD')` → arena-exporter.js 提取整段对话并下载 `arena-<日期时间>-<话题>.md`；脚本未就绪时先 `scripting.executeScript` 补注入 | 页面 toast「已导出 N 轮 / M 条回答 → 文件名」（复用采集 toast） | 未找到对话内容：toast「未找到对话内容…」（danger）；非对话页菜单不显示（`documentUrlPatterns`） | service-worker.js、content/arena-exporter.js |
 
 ### 3.3 宿主网页内（内容脚本）
 
@@ -228,7 +231,7 @@
 ## 5. 接口清单
 
 ### 5.1 后端 / 第三方 API
-**无**。全库 grep 无 `XMLHttpRequest`、`WebSocket`、`importScripts`、`chrome.runtime.sendMessage`/`onMessage`；唯一的 `fetch(` 调用位于 `manager/nav.js`，仅读取扩展包内同源资源 `config/nav.json`（`chrome.runtime.getURL`，chrome-extension:// 协议），**不发起任何外部网络请求**（高置信度）。
+**无**。全库 grep 无 `XMLHttpRequest`、`WebSocket`、`importScripts`；唯一的 `fetch(` 调用位于 `manager/nav.js`，仅读取扩展包内同源资源 `config/nav.json`（`chrome.runtime.getURL`，chrome-extension:// 协议），**不发起任何外部网络请求**（高置信度）。v1.1.0 起存在**扩展内部**消息通信：service-worker.js `chrome.tabs.sendMessage` ↔ arena-exporter.js `chrome.runtime.onMessage`（消息类型 `EXPORT_ARENA_MD`，不离开浏览器）。
 
 ### 5.2 浏览器扩展 API（chrome.*）
 
@@ -241,6 +244,10 @@
 | `chrome.action.onClicked` / `setBadgeText` / `setBadgeBackgroundColor` / `setBadgeTextColor` | 图标点击、badge | service-worker.js |
 | `chrome.commands.onCommand` | 快捷键 toggle-collect | service-worker.js |
 | `chrome.tabs.query` / `create` / `update` | 打开/聚焦管理页 | service-worker.js |
+| `chrome.contextMenus.removeAll` / `create` / `onClicked`（v1.1.0） | 右键菜单「Arena 对话导出」注册与点击（`documentUrlPatterns` 限 `/c/` 对话页） | service-worker.js |
+| `chrome.tabs.sendMessage`（v1.1.0） | 向对话页内容脚本发送 `EXPORT_ARENA_MD` | service-worker.js |
+| `chrome.runtime.onMessage` / `sendResponse`（v1.1.0） | 接收导出指令 | content/arena-exporter.js |
+| `chrome.scripting.executeScript`（v1.1.0） | 内容脚本未就绪时补注入 arena-exporter.js | service-worker.js |
 | `chrome.windows.update` | 聚焦管理页所在窗口 | service-worker.js |
 
 ### 5.3 Web 平台 API（宿主页面/管理页内）
@@ -333,11 +340,11 @@
 ## 7. 权限与角色
 
 - **无用户系统、无账号、无角色/权限分级**（代码无任何用户/登录/角色概念）。
-- 扩展权限（manifest.json `permissions`）：`storage`、`unlimitedStorage`、`tabs`；`host_permissions`: `<all_urls>`。
+- 扩展权限（manifest.json `permissions`）：`storage`、`unlimitedStorage`、`tabs`、`contextMenus`（v1.1.0）、`scripting`（v1.1.0）；`host_permissions`: `<all_urls>`。
 - 快捷键命令：`commands.toggle-collect`（`Ctrl+Shift+S`，非全局）。
 - CSP（manifest）：`script-src 'self'; object-src 'self'`。
-- 内容脚本注入范围：`matches: ["<all_urls>"]`，`all_frames: false`，`run_at: document_idle`。
-- 未申请 `scripting` / `webRequest` / `cookies` 等权限（manifest 原文可证）。
+- 内容脚本注入范围：`content.js` + `content.css` 为 `matches: ["<all_urls>"]`，`all_frames: false`，`run_at: document_idle`；`arena-exporter.js` 为 `matches: ["https://arena.ai/c/*", "https://lmarena.ai/c/*"]`（v1.1.0），其余同上。
+- 未申请 `webRequest` / `cookies` / `downloads` 等权限（manifest 原文可证）。
 
 ---
 
@@ -389,7 +396,7 @@
 
 ### 8.6 包管理脚本
 
-- `package.json`：`version` 1.0.2；scripts `test`（`vitest run`）、`test:watch`；devDependencies 仅 `vitest ^4.1.10`。
+- `package.json`：`version` 1.1.0；scripts `test`（`vitest run`）、`test:watch`；devDependencies 仅 `vitest ^4.1.10`。
 - `design/package.json` scripts：`icons`（`node make-icons.js`）、`preview`；依赖 `sharp ^0.35.3`（仅图标生成用，不在扩展运行时）。
 
 ### 8.7 待办运行时配置（v1.0.0）
@@ -406,6 +413,16 @@
 ---
 
 ## 9. 版本与变更
+
+### v1.1.0 — 合并 Arena 对话导出（2026-08-23）
+
+- 版本号：`manifest.json` / `package.json` 均为 **1.1.0**（上一版 1.0.2）。
+- **新增**：右键菜单「Arena 对话导出」+ 内容脚本 `content/arena-exporter.js`（仅 `/c/` 对话页注入），把 arena.ai Battle Mode 整段对话导出为 Markdown 下载；能力合并自独立扩展 arena-md-exporter v1.1.0（已审计修复版本，转换层含嵌套列表/代码围栏/转义/序号锚定剥离）。纯下载行为，不读写 `snip_*`/`todo_*` 存储。
+- **消息通信**：项目首次出现扩展内部消息（SW `tabs.sendMessage` ↔ arena-exporter `runtime.onMessage`，类型 `EXPORT_ARENA_MD`）；仍无任何外部网络请求。
+- **权限**：`permissions` 新增 `contextMenus`、`scripting`；`host_permissions` 维持 `<all_urls>` 不变。
+- **toast 复用**：导出反馈优先调用 `content.js` 全局 `showToast`（同一隔离世界），`content.js` 不可用时退回右下角简易 toast。
+- **测试**：新增 `tests/arena-exporter.test.js` 5 例（cleanTitle）；105 → **110**，`npm test` 全部通过；jsdom 对真实保存页（5 轮/10 答/44 来源）端到端结果与基准一致。
+- **无变化**：采集链路、存储结构、待办功能、管理页、导航配置、快捷键、badge。
 
 ### v1.0.2 — 修复 toast 圆角外灰色直角背景（2026-08-16）
 

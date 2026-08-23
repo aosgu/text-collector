@@ -1,7 +1,7 @@
 # 功能规格 — 网页文字采集器
 
-> 依据：`docs/_facts.md` 与代码（v1.0.2，2026-08-16）。每个功能包含：用户故事、触发入口、交互流程、输入/输出、边界情况、关联接口/数据/组件、置信度。
-> 交互描述均对应到具体组件（DOM id/class）与文件。共 **27 个功能**（功能 21 为 v0.8.0 新增的网站导航；功能 22–27 为 v1.0.0 新增的待办清单；v1.0.1 微调功能 24 的工作台布局与输入宽度行为；v1.0.2 修复功能 14 页面内 toast 的视觉渲染缺陷，交互不变）。
+> 依据：`docs/_facts.md` 与代码（v1.1.0，2026-08-23）。每个功能包含：用户故事、触发入口、交互流程、输入/输出、边界情况、关联接口/数据/组件、置信度。
+> 交互描述均对应到具体组件（DOM id/class）与文件。共 **28 个功能**（功能 21 为 v0.8.0 新增的网站导航；功能 22–27 为 v1.0.0 新增的待办清单；v1.0.1 微调功能 24 的工作台布局与输入宽度行为；v1.0.2 修复功能 14 页面内 toast 的视觉渲染缺陷，交互不变；功能 28 为 v1.1.0 新增的 Arena 对话导出）。
 
 ---
 
@@ -406,3 +406,24 @@
   - 创建失败（storage 异常）→ todo.js 静默 catch，不阻塞 init（用户可手动 `+ 新建清单`）。
 - **关联**：`utils/todo-storage.js`（`getOrCreateTodayList`）、`manager/todo.js`（init）。
 - **置信度：高**（幂等与失效重建有单测覆盖）。
+
+## 功能 28：Arena 对话导出（v1.1.0）
+
+- **用户故事**：作为用户，我在 arena.ai 的对话页上右键，即可把整段 Battle Mode 对话（每轮用户提问 + 双模型回答 + 引用来源）导出为 Markdown 文件。
+- **触发入口**：仅 `https://arena.ai/c/*`、`https://lmarena.ai/c/*` 对话页右键菜单「Arena 对话导出」（`manifest.json` permissions `contextMenus`；菜单项 `documentUrlPatterns` 限定对话页，其它页面不显示）。能力合并自独立扩展 arena-md-exporter v1.1.0。
+- **交互流程**：
+  1. SW `contextMenus.onClicked` → 正则 `^https:\/\/(lm)?arena\.ai\/c\//i` 校验 `info.pageUrl` 兜底；
+  2. `chrome.tabs.sendMessage(tabId, { type: 'EXPORT_ARENA_MD' })` 通知内容脚本；失败（脚本未就绪，如 SPA 从首页无刷新进入对话页）→ `chrome.scripting.executeScript` 补注入 `content/arena-exporter.js` 后重发；
+  3. 内容脚本 `extractConversation()` 按时间正序提取消息列表（`ol.flex-col-reverse`，DOM 最新在前需反转；用户消息 `div.mx-auto`，模型组 `div.w-full` → `@container/carousel` 幻灯片各卡片，模型名取 `h2` "Message from <模型>"）；
+  4. `buildMarkdown()` 组装（元信息头 + 每轮用户/各模型回答/引用来源列表 + 尾注），`download()` 以 blob 触发 `arena-<日期>-<时间>-<话题>.md` 下载；
+  5. toast 反馈：优先复用 `content.js` 全局 `showToast`（与采集 toast 视觉一致），不可用时退回右下角简易样式。
+- **输入**：页面 DOM（需先滚动加载全部历史消息——页面为滚动懒加载）；**输出**：Markdown 文件下载（纯下载，不写入 `snip_*`/`todo_*` 存储）。
+- **Markdown 转换要点**：嵌套列表缩进（4 空格/层，有序父级下安全）、`<ol start>`、代码围栏按内容最长反引号串加长并保留 `language-*`、表格 `|` / 链接文本 `[]` / 链接地址空白括号转义、相对链接转绝对、`<hr>`/`<img>` 不丢弃、引用来源标题按序号锚定剥离前缀（"1Genetic…"、"12 遗传…"、"1. "、"(3) "，且不误伤"2024 年指南"类标题）。
+- **边界情况**：
+  - 非对话页（首页/排行榜/其它网站）→ 菜单项不显示；即使误触发也被 URL 校验拦下；
+  - 页面无对话内容（未加载/非对话 DOM）→ toast「未找到对话内容…」（danger），不下载；
+  - 轮播中未渲染的模型面板不在 DOM（站点行为）→ 不导出该卡片，导出内容 = 当前挂载卡片；
+  - 重复注入（声明式 + 补注入）→ `window.__arenaMdExporterLoaded` 标志防重复注册；
+  - 与独立扩展 arena-md-exporter 同时启用 → 右键出现重复菜单项，应停用其一。
+- **关联**：`background/service-worker.js`（菜单注册/点击分发）、`content/arena-exporter.js`（提取/转换/下载）、`manifest.json`（contextMenus/scripting 权限、第二个 content_scripts 条目）、`tests/arena-exporter.test.js`（cleanTitle 5 例）。
+- **置信度：高**（jsdom 对真实保存页 5 轮/10 答/44 来源端到端与基准一致；cleanTitle 有单测；DOM 选择器依赖站点 2026-08 结构，改版时可用页面控制台 `__arenaExport.extractConversation()` 排查）。

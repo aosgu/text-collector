@@ -5,6 +5,37 @@
 
 ---
 
+## v1.1.0 — 合并 Arena 对话导出（2026-08-23）
+
+将独立扩展 arena-md-exporter（v1.1.0，已审计修复）的对话导出能力合并进本扩展：在 arena.ai / lmarena.ai 的对话页（`/c/` 路径）右键即可把整段 Battle Mode 对话导出为 Markdown 文件下载。采集、待办、管理页功能与存储结构均不变；arena 导出为纯下载行为，不写入 `snip_*` 存储。
+
+### 新增
+
+- **右键菜单「Arena 对话导出」**（`background/service-worker.js` + `manifest.json`）
+  - `contextMenus` 权限；菜单项 `documentUrlPatterns` 限定 `https://arena.ai/c/*`、`https://lmarena.ai/c/*`，其它页面不显示；点击处理再以正则 `^https:\/\/(lm)?arena\.ai\/c\//i` 校验 `info.pageUrl` 兜底；
+  - 点击 → `chrome.tabs.sendMessage` 触发内容脚本导出；脚本未就绪（SPA 从首页等非 `/c/` 页进入对话页、无刷新导航）时先 `chrome.scripting.executeScript` 补注入再重发消息（`scripting` 权限）；`window.__arenaMdExporterLoaded` 标志防重复注册；
+  - 菜单项图标由 Chrome 自动使用扩展图标（`icons/icon16.png`），无独立图标配置。
+- **内容脚本 `content/arena-exporter.js`**（manifest 第二个 content_scripts 条目，仅注入 `/c/` 对话页）
+  - DOM 提取 → Markdown 转换（嵌套列表缩进、代码围栏按内容加长并保留语言、表格/链接/图片转义、按序号锚定剥离引用来源标题序号）→ blob 下载 `arena-日期-时间-话题.md`；
+  - 导出反馈复用 `content.js` 的全局 `showToast`（同一隔离世界，与采集 toast 视觉一致），`content.js` 不可用时退回右下角简易 toast；
+  - 暴露 `window.__arenaExport` 调试钩子（extractConversation / buildMarkdown / exportNow）。
+- **测试**：`tests/arena-exporter.test.js` 5 例（cleanTitle 序号锚定剥离：粘连/分隔符/年份保留/无序号），105 → **110**。
+
+### 无变化 / 已知影响
+
+- 采集链路（selectionchange / 准入 / 去重扩选）、`snip_*` 存储结构、待办功能（`todo_*`）、管理页、导航配置、快捷键、badge 行为均无变化；arena 导出不读写 chrome.storage。
+- manifest `permissions` 新增 `contextMenus`、`scripting`；`host_permissions` 维持 `<all_urls>`（采集既有决策，覆盖 arena 域名）。
+- 本扩展与原独立扩展 arena-md-exporter 功能重叠：启用本版本后应在 `chrome://extensions` 停用/移除后者，否则右键菜单出现重复项。
+- `service-worker.js` 首次出现 `chrome.runtime` 消息通信（`tabs.sendMessage` ↔ arena-exporter `onMessage`，消息类型 `EXPORT_ARENA_MD`）；仍无任何外部网络请求。
+
+### 验证
+
+- `npm test`：**5 个测试文件、110/110 用例通过**（arena-exporter 5 例新增）；
+- jsdom 对真实保存的 arena.ai 对话页（5 轮 / 10 回答 / 44 来源）端到端提取，结果与 arena-md-exporter 基准一致，来源标题序号剥离正确；
+- `node --check` 通过（arena-exporter.js / service-worker.js）。
+
+---
+
 ## v1.0.2 — 修复 toast 圆角外灰色直角背景（2026-08-16）
 
 修复内容页采集 toast 的视觉 Bug：白色圆角卡片外围出现一层灰色直角矩形背景（本应透明）。本版本为纯样式修复，**不改变**采集链路、存储结构、扩展权限、管理页功能与待办功能。
