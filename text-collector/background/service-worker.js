@@ -2,16 +2,21 @@
  * service-worker.js — Background Service Worker (MV3)
  *
  * 职责：
- *  - 首次安装时初始化 schemaVersion / collectEnabled
+ *  - 首次安装时初始化 schemaVersion / collectEnabled，并注册右键菜单「Arena 对话导出」
  *  - 点击工具栏图标：打开或聚焦管理页（manifest 未设 default_popup，故 onClicked 会触发）；
  *    管理页默认 hash #collect（采集 tab），待办 tab 在页面内通过顶 Tab 切换
  *  - Ctrl+Shift+S 切换采集开关
  *  - 开关变化时同步工具栏 badge（关闭时显示 OFF）
+ *  - 右键菜单「Arena 对话导出」：通知 arena 对话页内的内容脚本导出 Markdown，
+ *    脚本未就绪（SPA 从非 /c/ 页进入对话页）时先经 chrome.scripting 补注入
  *
  * 采集逻辑在 content script 里直接读写 storage，本文件不做中转。
  */
 
 const MANAGER_URL = chrome.runtime.getURL('manager/manager.html');
+
+// 仅对话页（/c/ 路径）允许导出；菜单经 documentUrlPatterns 也只在对话页显示
+const ARENA_PAGE_URL = /^https:\/\/(lm)?arena\.ai\/c\//i;
 
 chrome.runtime.onInstalled.addListener(async () => {
   const data = await chrome.storage.local.get(['schemaVersion', 'collectEnabled']);
@@ -30,6 +35,38 @@ chrome.runtime.onInstalled.addListener(async () => {
     ? updates.collectEnabled
     : data.collectEnabled !== false;
   await updateBadge(enabled);
+
+  // 注册右键菜单：先清空再创建，避免扩展更新/重载后残留同名菜单项
+  chrome.contextMenus.removeAll(() => {
+    chrome.contextMenus.create({
+      id: 'export-arena-md',
+      title: 'Arena 对话导出',
+      contexts: ['all'],
+      documentUrlPatterns: ['https://arena.ai/c/*', 'https://lmarena.ai/c/*'],
+    });
+  });
+});
+
+// ── 右键菜单「Arena 对话导出」 → 内容脚本导出 ──
+chrome.contextMenus.onClicked.addListener(async (info, tab) => {
+  if (info.menuItemId !== 'export-arena-md') return;
+  if (typeof tab.id !== 'number') return;
+  // 双重校验（documentUrlPatterns 已限制显示范围，这里再拦一次点击来源）
+  if (!ARENA_PAGE_URL.test(info.pageUrl || tab.url || '')) return;
+  try {
+    await chrome.tabs.sendMessage(tab.id, { type: 'EXPORT_ARENA_MD' });
+  } catch {
+    // 内容脚本未就绪（SPA 导航进入对话页）：补注入后重发消息
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        files: ['content/arena-exporter.js'],
+      });
+      await chrome.tabs.sendMessage(tab.id, { type: 'EXPORT_ARENA_MD' });
+    } catch (_) {
+      // 页面尚未加载完成等异常，静默忽略
+    }
+  }
 });
 
 // Service Worker 冷启动（浏览器重启后）时同步 badge，否则关闭状态会丢 badge

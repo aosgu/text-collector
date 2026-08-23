@@ -16,6 +16,7 @@
 - **网站导航**：管理页头部导航图标，hover 展开网站快捷方式分栏面板（新标签页打开），站点列表由包内 `config/nav.json` 配置
 - **待办清单**（v1.0.0 起）：管理页顶 Tab 切换到「待办」即可使用：多清单 + 待办项 + 模板库（首启惰性创建「今日待办」），数据与采集完全隔离（`todo_` 前缀存储键）
 - **待办工作台布局**（v1.0.1）：左侧边栏桌面基准宽度为 300px；添加事项输入框以 480px 为弹性基准，窄窗口可收缩、宽窗口不因剩余空间继续拉伸，只有输入文本超过基准时按内容扩展
+- **Arena 对话导出**（v1.1.0 起）：在 `arena.ai` / `lmarena.ai` 的对话页（`/c/` 路径）右键 →「Arena 对话导出」，整段 Battle Mode 对话（每轮提问 + 双模型回答 + 引用来源）导出为 Markdown 文件下载；纯下载行为，不写入采集存储
 - **键盘可达**：Tab 导航、焦点陷阱、aria 语义
 
 ## 文档地图
@@ -24,7 +25,7 @@
 |------|------|
 | [`docs/_facts.md`](../docs/_facts.md) | **当前事实源**：代码事实清单（页面/模块/操作/数据模型/接口/状态/权限/配置） |
 | [`docs/01-PRODUCT.md`](../docs/01-PRODUCT.md) | 产品文档：定义、目标用户、功能全景、非目标 |
-| [`docs/02-FEATURES.md`](../docs/02-FEATURES.md) | 功能规格：21 个功能，含交互流程、边界情况、置信度 |
+| [`docs/02-FEATURES.md`](../docs/02-FEATURES.md) | 功能规格：28 个功能，含交互流程、边界情况、置信度 |
 | [`docs/03-USER-FLOWS.md`](../docs/03-USER-FLOWS.md) | 用户流程：8 个关键流程的状态迁移 |
 | [`docs/04-ARCHITECTURE.md`](../docs/04-ARCHITECTURE.md) | 技术架构：模块划分、依赖、部署运行 |
 | [`docs/05-DATA-MODEL.md`](../docs/05-DATA-MODEL.md) | 数据模型：实体字段、接口清单、数据流向 |
@@ -81,6 +82,14 @@
 
 - 每栏 `title` 可选；链接仅放行 http/https；文件缺失或无有效链接时图标自动隐藏
 
+### Arena 对话导出（v1.1.0 起）
+
+- 在 `arena.ai` / `lmarena.ai` 的对话页（形如 `https://arena.ai/c/<id>`）右键 →「**Arena 对话导出**」
+- 整段 Battle Mode 对话导出为 `arena-<日期>-<时间>-<话题>.md` 自动下载；导出前请**从上到下滚动一遍**（历史消息滚动懒加载）
+- 菜单项只在对话页显示；从首页进入对话（页面未刷新）时首次点击会自动补注入脚本，照常导出
+- 站点改版导出失败时，可在页面控制台运行 `__arenaExport.extractConversation()` 排查
+- 若同时装着独立扩展 arena-md-exporter，请停用其一，避免右键菜单重复
+
 ### 采集开关
 
 - 管理页右上角开关：一键暂停/恢复采集
@@ -134,6 +143,7 @@ text-collector/
 ├── manifest.json          # MV3 配置（权限 / 快捷键 / 内容脚本声明）
 ├── content/
 │   ├── content.js         # 内容脚本：选区监听 + 准入规则 + Shadow DOM toast
+│   ├── arena-exporter.js  # Arena 对话页内容脚本：DOM → Markdown → 下载（v1.1.0）
 │   └── content.css        # toast 宿主钉死样式（与内联样式双保险；不裁剪子元素阴影）
 ├── manager/
 │   ├── manager.html       # 管理页（含 #collect 采集 tab 与 #todo 待办 tab）
@@ -149,7 +159,7 @@ text-collector/
 ├── config/
 │   └── nav.json           # 网站导航配置（后台文件配置，无前端编辑）
 ├── background/
-│   └── service-worker.js  # 安装初始化 / 图标点击 → manager.html / 快捷键 / badge
+│   └── service-worker.js  # 安装初始化 / 图标点击 → manager.html / 快捷键 / badge / 右键菜单 → Arena 导出
 ├── utils/
 │   ├── storage.js         # 采集记录分片存储 + CONFIG 常量
 │   └── todo-storage.js    # 待办数据层（todo_ 前缀键，与 snip_* 隔离）
@@ -157,7 +167,7 @@ text-collector/
 └── tests/                 # vitest 单元测试（Node 环境）
 ```
 
-- 测试：`cd text-collector && npm install && npm test`（vitest，105 用例：storage 16 + content 44 + nav 9 + todo-storage 36）
+- 测试：`cd text-collector && npm install && npm test`（vitest，110 用例：storage 16 + content 44 + nav 9 + todo-storage 36 + arena-exporter 5）
 - 图标再生成：`cd design && npm install && npm run icons`（sharp 参数化生成）
 - 详细技术说明见上方「文档地图」
 
@@ -174,4 +184,4 @@ text-collector/
 
 [MIT](../LICENSE)
 
-当前版本 **v1.0.2**。变更日志见 [`docs/CHANGELOG.md`](../docs/CHANGELOG.md)；v0.7.2 及更早的版本历史见 [`docs/archive/legacy-notes.md`](../docs/archive/legacy-notes.md)（历史文档，仅供追溯）。
+当前版本 **v1.1.0**。变更日志见 [`docs/CHANGELOG.md`](../docs/CHANGELOG.md)；v0.7.2 及更早的版本历史见 [`docs/archive/legacy-notes.md`](../docs/archive/legacy-notes.md)（历史文档，仅供追溯）。
