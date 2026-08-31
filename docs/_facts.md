@@ -1,7 +1,8 @@
 # 代码事实清单 — text-collector
 
-> 生成方式：对当前代码快照（v1.1.0，2026-08-23）的源码逐文件扫描，仅记录代码中可证明存在的内容。
+> 生成方式：对当前代码快照（v1.2.0，2026-08-31）的源码逐文件扫描，仅记录代码中可证明存在的内容。
 > 修订记录：
+> - 2026-08-31（v1.2.0）— 待办清单置顶：`manager/todo.js` `renderSidebar` 为每个清单项追加 `.todo-list-item-pin` 上箭头按钮；新增 `onPinList`（点击 → `TodoStorage.reorderLists` 一次性重排到第一位，无置顶标记字段；已在顶部 → info toast 不改序）；容器 `click` 代理优先拦截上箭头按钮点击，`keydown` 对焦点在上箭头按钮时放行原生激活。`manager/todo.css` 新增 `.todo-list-item-pin` 样式（默认隐藏、行悬停 / `:focus-visible` 出现）。数据层零改动（复用既有 `reorderLists` 与 `todo_lists.order`）。本版事实更新：§2 模块表（todo.js / todo.css 行）、§3.4 待办操作表、§9 版本变更。
 > - 2026-08-23（v1.1.0）— 合并 Arena 对话导出：新增 `content/arena-exporter.js`（manifest 第二个 content_scripts 条目，仅注入 `arena.ai/c/*`、`lmarena.ai/c/*`）与右键菜单「Arena 对话导出」（SW `contextMenus` 注册 + `tabs.sendMessage` 触发 + `scripting` 补注入兜底；消息类型 `EXPORT_ARENA_MD`）；manifest permissions 新增 `contextMenus`、`scripting`。本版事实更新：§1 内容脚本、§2 模块表（SW / arena-exporter / 测试行）、§3.2 浏览器操作表、§5.1/5.2 接口（首次出现 runtime 消息通信）、§7 权限、§8.6 测试计数、§9 版本变更。
 > - 2026-08-16（v1.0.2）— 修复内容页 toast 圆角矩形外的灰色直角背景：`content/content.js` 与 `content/content.css` 中宿主 `#text-collector-toast-host` 移除 `overflow: hidden !important`、`contain` 由 `layout style paint` 调整为 `layout style`（paint 包含/overflow 会把 `.toast` 的 box-shadow 裁剪到宿主盒内，圆角外残留阴影形成灰色直角矩形）；新增「Toast 宿主样式契约」回归用例 5 例（content 39 → 44，总数 100 → **105**）；版本号同步至 1.0.2（manifest.json / package.json）。
 > - 2026-08-15（v1.0.1）— 待办工作台布局微调及修复：`manager/todo.css` 将 `.todo-sidebar` 桌面宽度调整为 300px；`.todo-content` 使用 `flex: 1 1 0` + `min-width: 0`，`.todo-content-inner` 的最大宽度为 960px，以提供输入框可见扩展空间；`.todo-add-form input` 采用 `flex: 0 1 480px` + `width: 480px`，在窄容器中可收缩、在可用空间充足时不因剩余空间继续拉伸。添加按钮固定为 `flex: 0 0 28px`，并以 `margin-left: auto` 锚定至整行表单最右端，不被挤压变形。`manager/todo.js` 的 `resizeAddItemInput` 输入和提交清空后按文本测量结果**同步更新 `width` 与 `flex-basis`**，仅当内容所需宽度超过 480px 时扩展。`manager.js` 在主路由进入 `#todo` 时转交给 `TodoApp.handleHashChange()`；待办模块在路由解析后无条件渲染侧边栏和内容区，确保直接打开 `manager.html#todo` 不会白屏。
@@ -62,9 +63,9 @@
 | 管理页样式 | `manager/manager.css` | 全部视觉样式 + `:root` CSS 变量（主题色板） | manager.html `<link>` 引入 |
 | 单元测试 | `tests/storage.test.js`、`tests/content.test.js`、`tests/nav.test.js`、`tests/todo-storage.test.js`、`tests/arena-exporter.test.js`、`tests/helpers/load-source.js` | 用语法提取纯函数（`extractFunction`/`extractObjectLiteral`）在 Node 环境运行 vitest；storage 16 + content 44（含 v1.0.2 新增「Toast 宿主样式契约」5 例：对 `content.js` cssText 数组与 `content.css` 宿主规则做源码级静态断言）+ nav 9 + todo-storage 36 + arena-exporter 5（cleanTitle 序号锚定剥离）= **110** 个用例 | `npm test`（vitest，见 `package.json`/`vitest.config.js`，environment: node） |
 | 图标生成工具（开发期，非运行时） | `design/`（`make-icons.js`、`icon-spec.js`、`preview.js`、`build-icon.js` 等） | 参数化生成 `icons/icon16/48/128.png`（依赖 sharp） | `design/package.json` 脚本 `npm run icons` / `npm run preview`；产物被 manifest 引用，工具本身不进扩展包 |
-| 待办 tab 入口（v1.0.0，v1.0.1 调整） | `manager/todo.js` | `init`（加载数据、设置监听、绑定事件、首启惰性创建今日待办）、4 视图路由（`handleHashChange` / `switchTo` / `writeHash`）、`renderSidebar`、`renderListView`、`renderAllView`、`renderDoneView`、`renderTemplatesView`（路由解析后始终渲染）、`onCreateList` / `startRenameList` / `onDeleteList`、`onAddItem` / `onToggleItem` / `onDeleteItem` / `startEditItem` / 拖拽事件、`resizeAddItemInput`（测量添加事项输入框文本宽度，仅超出 480px 基准时同步扩展 `width` 与 `flex-basis`）、`onSaveAsTemplate` / `onUseTemplate` / `onCopyTemplateToCurrentList` / `onDeleteTemplate` / `makeTemplateCard` | manager.html `<script>` 引入（位于 manager.js 之前）；通过 `window.__managerBridge` 复用 manager 的 toast / confirm / edit 弹窗 |
+| 待办 tab 入口（v1.0.0，v1.0.1 调整） | `manager/todo.js` | `init`（加载数据、设置监听、绑定事件、首启惰性创建今日待办）、4 视图路由（`handleHashChange` / `switchTo` / `writeHash`）、`renderSidebar`、`renderListView`、`renderAllView`、`renderDoneView`、`renderTemplatesView`（路由解析后始终渲染）、`onCreateList` / `startRenameList` / `onDeleteList` / `onPinList`（v1.2.0：侧边栏上箭头按钮 → `reorderLists` 一次性置顶）、`onAddItem` / `onToggleItem` / `onDeleteItem` / `startEditItem` / 拖拽事件、`resizeAddItemInput`（测量添加事项输入框文本宽度，仅超出 480px 基准时同步扩展 `width` 与 `flex-basis`）、`onSaveAsTemplate` / `onUseTemplate` / `onCopyTemplateToCurrentList` / `onDeleteTemplate` / `makeTemplateCard` | manager.html `<script>` 引入（位于 manager.js 之前）；通过 `window.__managerBridge` 复用 manager 的 toast / confirm / edit 弹窗 |
 | 待办数据层（v1.0.0） | `utils/todo-storage.js` | 纯函数 + storage Promise：`generateUUID`、`normalizeListName`、`getOrCreateList`、`getOrCreateTodayList`、`getLists`、`createList`、`renameList`、`deleteList`、`getItems`、`saveItems`、`addItem`、`toggleItem`、`deleteItem`、`sortItems`、`loadTemplates`、`saveAsTemplate`、`createListFromTemplate`、`copyTemplateToList`、`deleteTemplate` | manager/todo.js（全部 CRUD 调用）；tests/todo-storage.test.js（36 例） |
-| 待办样式（v1.0.0，v1.0.1 调整） | `manager/todo.css` | 同页 Tab 切换下的待办视图样式；**不**重定义 `:root` 变量，直接复用 `manager.css` 已加载的 `--bg` / `--surface` / `--text` / `--blue` 等；自定义类以 `.todo-*` 前缀命名避免与采集模块冲突。v1.0.1：`.todo-sidebar` 固定桌面宽度为 300px 且不收缩；`.todo-content` 可收缩且内容内层最大 960px；`.todo-add-form input` 使用 `flex: 0 1 480px` + `width: 480px` + `min-width: 0`，默认不增长但可在窄容器内收缩；添加按钮为固定 `28px` 弹性项，并以 `margin-left: auto` 固定在表单最右端，不会被挤压 | manager.html `<link>` 引入（与 manager.css 并列） |
+| 待办样式（v1.0.0，v1.0.1 调整） | `manager/todo.css` | 同页 Tab 切换下的待办视图样式；**不**重定义 `:root` 变量，直接复用 `manager.css` 已加载的 `--bg` / `--surface` / `--text` / `--blue` 等；自定义类以 `.todo-*` 前缀命名避免与采集模块冲突。v1.0.1：`.todo-sidebar` 固定桌面宽度为 300px 且不收缩；`.todo-content` 可收缩且内容内层最大 960px；`.todo-add-form input` 使用 `flex: 0 1 480px` + `width: 480px` + `min-width: 0`，默认不增长但可在窄容器内收缩；添加按钮为固定 `28px` 弹性项，并以 `margin-left: auto` 固定在表单最右端，不会被挤压。v1.2.0：新增 `.todo-list-item-pin` 上箭头按钮样式（默认 `opacity:0` 常驻占位，行悬停 / `:focus-visible` 时出现，悬停高亮品牌蓝） | manager.html `<link>` 引入（与 manager.css 并列） |
 
 ---
 
@@ -121,6 +122,7 @@
 | 点击管理页顶部「采集」`<a href="#collect">#brand-collect-link`（或浏览器无 hash） | `location.hash = '#collect'` → 切到 `#view-collect` | 采集 tab 激活；toolbar 完整 | — | manager.js |
 | 点侧边栏「+ 新建清单」`#todo-new-list-btn` | `onCreateList` → `createList('未命名清单')` → 跳到新清单工作台 → 自动进入重命名态 | 新清单出现在侧边栏（按 `order = max+1`）；自动 focus 工作台输入框 | — | todo.js、utils/todo-storage.js |
 | 点击侧边栏清单项 `.todo-list-item` | `switchTo('list', listId)` → `writeHash` → 工作台切换 | 右侧切到该清单工作台；侧边栏高亮 | — | todo.js |
+| 悬停侧边栏清单项 → 上箭头按钮 `.todo-list-item-pin`（v1.2.0） | 点击（或键盘 Enter/Space 原生激活）→ `onPinList(listId)` → `reorderLists([目标, 其余按原相对顺序])` 重写 `order`；**一次性重排**，无置顶标记字段 | 目标清单移到侧边栏第一位；toast「已置顶「X」」（success）；按钮仅在行悬停 / `:focus-visible` 时可见 | 已在第一位 → toast「该清单已在最上面」（info，不改序）；点击按钮不触发清单切换 / 双击重命名 | todo.js、todo.css、utils/todo-storage.js |
 | 侧边栏清单项 `.todo-list-item-name` 双击 / F2 | `startRenameList(listId)` → `contenteditable=true` 全选 | 可编辑态 | — | todo.js |
 | 重命名 Enter / blur | `renameList(id, newName)` → 同步写 `updatedAt` | 侧边栏 + 工作台标题更新 | 空名 → 静默恢复原值 | utils/todo-storage.js |
 | 重命名 Esc | 取消编辑 | 恢复原值 | — | todo.js |
@@ -413,6 +415,14 @@
 ---
 
 ## 9. 版本与变更
+
+### v1.2.0 — 待办清单置顶（2026-08-31）
+
+- 版本号：`manifest.json` / `package.json` 均为 **1.2.0**（上一版 1.1.0）。
+- **新增**：待办侧边栏「我的清单」清单项置顶——悬停出现 `.todo-list-item-pin` 上箭头按钮，点击经 `onPinList` → `TodoStorage.reorderLists` 把该清单一次性重排到第一位（`order` 重写为目标 1、其余按原相对顺序 2..n）。
+- **设计要点**：一次性重排而非永久置顶，**不新增**任何置顶标记字段 / 存储键；已在第一位时点击仅提示「该清单已在最上面」（info），不改数据；点击上箭头按钮不触发清单切换 / 双击重命名（事件代理优先拦截）；键盘可达（`<button>` + `:focus-visible` 显示，Enter/Space 原生激活）。
+- **无变化**：采集链路、`snip_*` / `todo_*` 存储结构、待办其余操作、管理页、导航、快捷键、badge；`utils/todo-storage.js` 零改动（`reorderLists` 为 v1.0.0 既有，本版首次被 UI 调用）。
+- **测试**：无新增用例，`npm test` 110/110 通过；jsdom 端到端验证真实 `todo.js` + `todo-storage.js` 置顶流程（渲染 / 重排 / 已在顶部 / 连续置顶 / 清单切换回归）。
 
 ### v1.1.0 — 合并 Arena 对话导出（2026-08-23）
 

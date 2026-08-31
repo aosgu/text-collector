@@ -5,4 +5,4 @@
 - 纯个人备忘 · 数据完全本地 · 零外部网络请求
 - 扩展代码与完整 README：[`text-collector/`](text-collector/README.md)
 - 文档：`docs/`（[`_facts.md`](docs/_facts.md) 为当前事实源，[`CHANGELOG.md`](docs/CHANGELOG.md) 为变更日志，[`archive/`](docs/archive/) 为历史归档，仅供追溯）
-- 当前版本：**v1.1.0**（合并 Arena 对话导出：对话页右键「Arena 对话导出」下载 Markdown；采集与待办功能不变）
+- 当前版本：**v1.2.0**（待办侧边栏「我的清单」新增清单置顶：悬停清单项出现上箭头按钮，点击把该清单一次性移到最上面；其余功能不变）

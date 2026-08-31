@@ -5,6 +5,30 @@
 
 ---
 
+## v1.2.0 — 待办清单置顶（2026-08-31）
+
+在待办侧边栏「我的清单」为每个清单项增加置顶入口：悬停清单项时出现上箭头按钮，点击即把该清单移到最上面。这是**一次性重排**而非永久置顶——只重写 `order` 让其排最前，不存任何置顶标记，后续新建清单 / 再次置顶其他清单都会把它正常挤下去。
+
+### 新增
+
+- **侧边栏清单置顶**（`manager/todo.js` + `manager/todo.css`）
+  - `renderSidebar` 为每个 `.todo-list-item` 追加 `.todo-list-item-pin` 上箭头按钮（内联 SVG，`aria-label` 含清单名）；默认 `opacity:0` 常驻占位（避免行内跳动），行悬停 / 键盘 `:focus-visible` 时出现，悬停按钮本身高亮为品牌蓝。
+  - 点击上箭头按钮 → `onPinList(listId)`：目标已在第一位 → toast「该清单已在最上面」（info，不改动）；否则拼出「目标 + 其余按原相对顺序」的 id 序列，调用**既有**数据层 `TodoStorage.reorderLists` 重写 `order`，`refreshAll` + `renderSidebar` 后 toast「已置顶「X」」（success）。
+  - 事件代理在容器 `click` 里优先拦截 `.todo-list-item-pin`（不触发清单切换 / 双击重命名）；`keydown` 在焦点位于上箭头按钮时直接放行，交给原生按钮的 Enter/Space 激活，避免与容器级「Enter 切换」冲突。
+  - **不新增存储键 / 字段**：复用 `todo_lists` 既有 `order`，数据层零改动。
+
+### 无变化
+
+- 采集链路、`snip_*` 存储、待办数据模型与其余操作（增删改 / 勾选 / 拖拽 / 模板）、管理页、导航配置、快捷键、badge 均无变化；`reorderLists` 为 v1.0.0 既有函数，本版仅首次被 UI 调用。
+
+### 验证
+
+- `npm test`：**5 个测试文件、110/110 用例通过**（无新增用例，纯逻辑层未改）；
+- jsdom 端到端跑真实 `todo.js` + `todo-storage.js`（mock `chrome.storage`）：初始渲染含上箭头按钮、点击置顶重写 `order` 且其余清单相对顺序不变、已在顶部时提示不改序、连续置顶生效、点击清单项本身仍正常切换工作台；
+- `node --check` 通过（todo.js）。
+
+---
+
 ## v1.1.0 — 合并 Arena 对话导出（2026-08-23）
 
 将独立扩展 arena-md-exporter（v1.1.0，已审计修复）的对话导出能力合并进本扩展：在 arena.ai / lmarena.ai 的对话页（`/c/` 路径）右键即可把整段 Battle Mode 对话导出为 Markdown 文件下载。采集、待办、管理页功能与存储结构均不变；arena 导出为纯下载行为，不写入 `snip_*` 存储。
