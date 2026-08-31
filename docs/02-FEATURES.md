@@ -1,7 +1,7 @@
 # 功能规格 — 网页文字采集器
 
-> 依据：`docs/_facts.md` 与代码（v1.1.0，2026-08-23）。每个功能包含：用户故事、触发入口、交互流程、输入/输出、边界情况、关联接口/数据/组件、置信度。
-> 交互描述均对应到具体组件（DOM id/class）与文件。共 **28 个功能**（功能 21 为 v0.8.0 新增的网站导航；功能 22–27 为 v1.0.0 新增的待办清单；v1.0.1 微调功能 24 的工作台布局与输入宽度行为；v1.0.2 修复功能 14 页面内 toast 的视觉渲染缺陷，交互不变；功能 28 为 v1.1.0 新增的 Arena 对话导出）。
+> 依据：`docs/_facts.md` 与代码（v1.2.0，2026-08-31）。每个功能包含：用户故事、触发入口、交互流程、输入/输出、边界情况、关联接口/数据/组件、置信度。
+> 交互描述均对应到具体组件（DOM id/class）与文件。共 **28 个功能**（功能 21 为 v0.8.0 新增的网站导航；功能 22–27 为 v1.0.0 新增的待办清单；v1.0.1 微调功能 24 的工作台布局与输入宽度行为；v1.0.2 修复功能 14 页面内 toast 的视觉渲染缺陷，交互不变；功能 28 为 v1.1.0 新增的 Arena 对话导出；v1.2.0 为功能 23 增加侧边栏清单置顶入口，交互增量、不新增功能编号）。
 
 ---
 
@@ -322,19 +322,21 @@
 
 > v1.0.0 新增。`utils/todo-storage.js` 纯数据层 + `manager/todo.js` 渲染/事件。
 
-- **用户故事**：作为用户，我能在待办 tab 左侧创建多个清单、重命名、删除。
+- **用户故事**：作为用户，我能在待办 tab 左侧创建多个清单、重命名、删除，并把常用清单临时置顶到最上面。
 - **触发入口**：
   - 「+ 新建清单」按钮 `#todo-new-list-btn`；
   - 侧边栏清单项点击（切换工作台）/ 双击（重命名）；
+  - 侧边栏清单项悬停出现的上箭头按钮 `.todo-list-item-pin`（v1.2.0，置顶）；
   - 工作台顶部「删除清单」按钮（**仅**此处可删，侧边栏无删除入口）。
 - **交互流程**：
   - **创建**：`createList(name?)` → name 缺省或 trim 后空 → 「未命名清单」；`order = max(order)+1`（新清单放最下）；同步预创建空 items 桶 `todo_items_<id> = []`；UI：跳到新清单的工作台并自动进入重命名态。
   - **重命名**：双击 / F2 / Enter 触发 → 侧边栏 `todo-list-item-name` 设 `contenteditable=true` 全选；Enter / blur 保存；Esc 取消；空名拒绝（恢复原值）；trim 后改名同步写 `updatedAt`。
+  - **置顶**（v1.2.0）：悬停清单项出现上箭头按钮 → 点击（或键盘 Enter/Space 原生激活）→ `onPinList(listId)` → 经既有 `reorderLists` 把目标清单一次性重排到第一位（`order` 重写为目标 1、其余按原相对顺序 2..n）。**一次性重排而非永久置顶**：不新增置顶标记字段 / 存储键，后续新建清单或再次置顶其他清单都会把它正常挤下去。UI：侧边栏立即按新顺序重渲染；成功 toast「已置顶「X」」。点击上箭头按钮**不**触发清单切换 / 双击重命名（容器 `click` 代理优先拦截）。
   - **删除**：工作台「删除清单」按钮 → `showConfirmModal` 二次确认（含清单名 + 不可撤销提示）→ `deleteList(id)`（同步清 items 桶 + 若是「今日待办」清 `todo_today_list_id`）；UI：当前工作台清单被删 → 自动切到 `#todo/all`；toast「已删除清单」（success）。
 - **输入/输出**：清单名 string（trim + 限长 60）；操作结果 → 存储 + 视图切换。
-- **边界情况**：重命名空名 throw → UI 静默恢复；删除不存在 id throw → toast danger；模板引用已删除清单的 items 仍然有效（**模板是 items 文本快照，与原清单生命周期解耦**）。
-- **关联**：`utils/todo-storage.js`（createList / renameList / deleteList / normalizeListName）、`manager/todo.js`（onCreateList / startRenameList / onDeleteList / writeHash）、`manager/modal.js`。
-- **置信度：高**（createList / deleteList 等有 todo-storage.test.js 单测覆盖）。
+- **边界情况**：重命名空名 throw → UI 静默恢复；删除不存在 id throw → toast danger；模板引用已删除清单的 items 仍然有效（**模板是 items 文本快照，与原清单生命周期解耦**）；置顶已在第一位的清单 → toast「该清单已在最上面」（info），不改数据。
+- **关联**：`utils/todo-storage.js`（createList / renameList / deleteList / reorderLists / normalizeListName）、`manager/todo.js`（onCreateList / startRenameList / onDeleteList / onPinList / writeHash）、`manager/modal.js`。
+- **置信度：高**（createList / deleteList / reorderLists 等有 todo-storage.test.js 单测覆盖；置顶经 jsdom 端到端验证）。
 
 ## 功能 24：待办 — 事项 CRUD（含拖拽）
 

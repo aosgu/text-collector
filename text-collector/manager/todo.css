@@ -103,6 +103,35 @@
   color: var(--blue);
 }
 
+/* 置顶按钮：常驻占位避免行内跳动；默认隐藏，行悬停 / 键盘聚焦时出现 */
+.todo-list-item-pin {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  border-radius: var(--radius-xs);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity .12s, background .12s, color .12s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.todo-list-item:hover .todo-list-item-pin { opacity: 1; }
+.todo-list-item-pin:hover {
+  background: var(--blue-soft);
+  color: var(--blue);
+}
+.todo-list-item-pin:focus-visible {
+  opacity: 1;
+  outline: 2px solid var(--blue);
+  outline-offset: 1px;
+}
+.todo-list-item-pin svg { width: 12px; height: 12px; }
+
 .todo-sidebar-divider {
   height: 1px;
   background: var(--border);

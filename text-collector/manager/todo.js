@@ -142,6 +142,18 @@
       name.dataset.role = 'list-name';
       li.appendChild(name);
 
+      // 置顶按钮：行悬停时出现，点击把清单移到最上面（一次性排序，非永久置顶）
+      const pin = document.createElement('button');
+      pin.className = 'todo-list-item-pin';
+      pin.type = 'button';
+      pin.title = '置顶到最上面';
+      pin.setAttribute('aria-label', '把「' + list.name + '」置顶到最上面');
+      pin.innerHTML =
+        '<svg viewBox="0 0 16 16" fill="none" aria-hidden="true">' +
+        '<path d="M8 13V3M4.5 6.5L8 3l3.5 3.5"' +
+        ' stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+      li.appendChild(pin);
+
       const count = document.createElement('span');
       count.className = 'todo-list-item-count';
       count.textContent = String(uncompleted);
@@ -685,6 +697,33 @@
     );
   }
 
+  /**
+   * 置顶清单：把目标清单移到侧边栏第一位。
+   * 注意：这是"一次性重排"而非"永久置顶"——只重写 order 让它排最前，
+   * 后续新建清单 / 再次置顶其他清单都会把它正常挤下去，不存任何置顶标记。
+   */
+  async function onPinList(listId) {
+    const idx = state.lists.findIndex(l => l.id === listId);
+    if (idx === -1) return;
+    if (idx === 0) {
+      bridge().showToast('该清单已在最上面', { kind: 'info' });
+      return;
+    }
+    const ordered = [state.lists[idx]]
+      .concat(state.lists.filter(l => l.id !== listId))
+      .map(l => l.id);
+    const listName = state.lists[idx].name;
+    try {
+      await window.TodoStorage.reorderLists(ordered);
+      await refreshAll();
+      renderSidebar();
+      bridge().showToast('已置顶「' + listName + '」', { kind: 'success' });
+    } catch (err) {
+      console.error('[todo] pinList failed:', err);
+      bridge().showToast('置顶失败：' + (err.message || err), { kind: 'danger' });
+    }
+  }
+
   // ── 操作：待办项 ──
 
   async function onAddItem(listId, text) {
@@ -1040,6 +1079,14 @@
     const listContainer = $('todo-list-container');
     if (listContainer) {
       listContainer.addEventListener('click', (e) => {
+        // 置顶按钮：拦截，不触发清单切换 / 重命名
+        const pin = e.target.closest('.todo-list-item-pin');
+        if (pin) {
+          e.preventDefault();
+          const item = pin.closest('.todo-list-item');
+          if (item) onPinList(item.dataset.listId);
+          return;
+        }
         const item = e.target.closest('.todo-list-item');
         if (!item) return;
         const listId = item.dataset.listId;
@@ -1054,6 +1101,8 @@
       });
       // 键盘：Enter 切换
       listContainer.addEventListener('keydown', (e) => {
+        // 焦点在置顶按钮上时交给原生按钮激活（Enter/Space → click）
+        if (e.target.closest('.todo-list-item-pin')) return;
         const item = e.target.closest('.todo-list-item');
         if (!item) return;
         if (e.key === 'Enter' || e.key === ' ') {
