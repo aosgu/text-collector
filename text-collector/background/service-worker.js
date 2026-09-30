@@ -3,8 +3,7 @@
  *
  * 职责：
  *  - 首次安装时初始化 schemaVersion / collectEnabled，并注册右键菜单「Arena 对话导出」
- *  - 点击工具栏图标：打开或聚焦管理页（manifest 未设 default_popup，故 onClicked 会触发）；
- *    管理页默认 hash #collect（采集 tab），待办 tab 在页面内通过顶 Tab 切换
+ *  - 点击工具栏图标：打开或聚焦采集管理页（manifest 未设 default_popup，故 onClicked 会触发）
  *  - Ctrl+Shift+S 切换采集开关
  *  - 开关变化时同步工具栏 badge（关闭时显示 OFF）
  *  - 右键菜单「Arena 对话导出」：通知 arena 对话页内的内容脚本导出 Markdown，
@@ -82,8 +81,7 @@ chrome.storage.local.get('collectEnabled')
   .then(data => updateBadge(data.collectEnabled !== false))
   .catch(() => { /* storage 不可用时忽略 */ });
 
-// 点击工具栏图标 → 打开或聚焦 manager.html（默认 #collect 采集页）。
-// 待办 tab 通过 manager.html 顶 Tab 切换，不再有独立 todo 页面。
+// 点击工具栏图标 → 打开或聚焦采集管理页。
 chrome.action.onClicked.addListener(async () => {
   const tabs = await chrome.tabs.query({ url: MANAGER_URL });
   if (tabs.length > 0) {

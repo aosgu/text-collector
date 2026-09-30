@@ -7,6 +7,17 @@
 
 const SCHEMA_VERSION = 1;
 
+// 已保存记录可选的单色标签（ID 持久化；名称和色值只用于界面展示）。
+const SNIPPET_COLORS = Object.freeze([
+  { id: 'red', name: '红', hex: '#e5484d' },
+  { id: 'orange', name: '橙', hex: '#e98a15' },
+  { id: 'yellow', name: '黄', hex: '#d6a500' },
+  { id: 'green', name: '绿', hex: '#2d9b55' },
+  { id: 'blue', name: '蓝', hex: '#2f6fed' },
+  { id: 'purple', name: '紫', hex: '#8957c8' },
+  { id: 'gray', name: '灰', hex: '#858585' },
+]);
+
 // ── 可配置常量 ──
 const CONFIG = {
   // 存储
@@ -232,34 +243,33 @@ async function deleteSnippet(id) {
  * @param {Array} order ID 顺序列表
  * @param {Object} recordsMap 映射表 { 'snip_xxx': { id, saved, clearedFromHome, ... } }
  * @param {string} filter 筛选条件：'home' | 'saved' | 'all'
+ * @param {string|null} colorFilter 已保存记录的颜色 ID；null 表示全部颜色
  * @returns {Array} 经过筛选后的 ID 列表
  */
-function filterOrderRecords(order, recordsMap, filter = 'home') {
+function filterOrderRecords(order, recordsMap, filter = 'home', colorFilter = null) {
   if (!Array.isArray(order)) return [];
-  if (filter === 'all') return order;
+  if (filter === 'all' && !colorFilter) return order;
   return order.filter(id => {
     const r = recordsMap['snip_' + id];
     if (!r) return false;
-    if (filter === 'saved') {
-      return r.saved === true;
-    } else if (filter === 'home') {
-      return !r.clearedFromHome;
-    }
-    return true;
+    if (filter === 'saved' && r.saved !== true) return false;
+    if (filter === 'home' && r.clearedFromHome) return false;
+    return !colorFilter || r.color === colorFilter;
   });
 }
 
 /**
  * 获取过滤后的排序 ID 列表
  * @param {string} filter 'home' | 'saved' | 'all'
+ * @param {string|null} colorFilter 已保存记录颜色；不传表示不过滤
  */
-async function getFilteredOrder(filter = 'home') {
+async function getFilteredOrder(filter = 'home', colorFilter = null) {
   const orderData = await chrome.storage.local.get('snippets_order');
   const order = orderData.snippets_order || [];
-  if (order.length === 0 || filter === 'all') return order;
+  if (order.length === 0 || (filter === 'all' && !colorFilter)) return order;
 
   const recordsData = await chrome.storage.local.get(order.map(id => `snip_${id}`));
-  return filterOrderRecords(order, recordsData, filter);
+  return filterOrderRecords(order, recordsData, filter, colorFilter);
 }
 
 /**
@@ -317,10 +327,11 @@ async function clearAllSnippets() {
  * @param {number} offset - 起始位置
  * @param {number} limit - 每批数量
  * @param {string} filter - 筛选类型 ('home' | 'saved' | 'all')
+ * @param {string|null} colorFilter - 已保存记录颜色 ID；null 表示全部颜色
  * @returns {Promise<{records: Array, total: number}>}
  */
-async function getSnippets(offset = 0, limit = CONFIG.PAGE_SIZE, filter = 'home') {
-  const order = await getFilteredOrder(filter);
+async function getSnippets(offset = 0, limit = CONFIG.PAGE_SIZE, filter = 'home', colorFilter = null) {
+  const order = await getFilteredOrder(filter, colorFilter);
   const total = order.length;
 
   const pageIds = order.slice(offset, offset + limit);
@@ -334,10 +345,11 @@ async function getSnippets(offset = 0, limit = CONFIG.PAGE_SIZE, filter = 'home'
  * 获取记录（用于导出）。分批读取，避免一次性 get 大量 key。
  * 返回结果按 capturedAt 升序（最早在前）。
  * @param {string} filter - 筛选类型 ('home' | 'saved' | 'all')
+ * @param {string|null} colorFilter - 已保存记录颜色 ID；null 表示全部颜色
  * @returns {Promise<Array>}
  */
-async function getAllSnippets(filter = 'all') {
-  const order = await getFilteredOrder(filter);
+async function getAllSnippets(filter = 'all', colorFilter = null) {
+  const order = await getFilteredOrder(filter, colorFilter);
 
   const allRecords = [];
   for (let i = 0; i < order.length; i += CONFIG.EXPORT_BATCH_SIZE) {
@@ -364,6 +376,8 @@ async function toggleFavoriteSnippet(id) {
   if (!record) return null;
 
   record.saved = !record.saved;
+  // 取消收藏时清除颜色，避免无标签的首页记录携带旧收藏分类。
+  if (!record.saved) delete record.color;
   // 如果取消收藏，且该记录之前已被清空过（clearedFromHome=true），则将其彻底清理避免孤儿残留
   if (!record.saved && record.clearedFromHome) {
     await deleteSnippet(id);
@@ -372,6 +386,31 @@ async function toggleFavoriteSnippet(id) {
     await chrome.storage.local.set({ [key]: record });
     return { action: 'updated', record };
   }
+}
+
+/** 验证已保存笔记颜色；null 表示清除颜色标签。 */
+function isValidSnippetColor(color) {
+  return color === null || SNIPPET_COLORS.some(item => item.id === color);
+}
+
+/**
+ * 设置已保存记录的颜色标签。给未收藏记录设置颜色时，会同时收藏该记录。
+ * @param {string} id 记录 ID
+ * @param {string|null} color 已知颜色 ID，null 表示移除标签
+ * @returns {Promise<{action: string, record?: object}|null>}
+ */
+async function setSnippetColor(id, color) {
+  if (!isValidSnippetColor(color)) return null;
+  const key = `snip_${id}`;
+  const data = await chrome.storage.local.get(key);
+  const record = data[key];
+  if (!record) return null;
+
+  record.saved = true;
+  if (color) record.color = color;
+  else delete record.color;
+  await chrome.storage.local.set({ [key]: record });
+  return { action: 'updated', record };
 }
 
 /**
@@ -410,8 +449,8 @@ async function setCollectEnabled(enabled) {
 /**
  * 获取最早记录时间（用于清空确认提示）
  */
-async function getEarliestDate(filter = 'home') {
-  const order = await getFilteredOrder(filter);
+async function getEarliestDate(filter = 'home', colorFilter = null) {
+  const order = await getFilteredOrder(filter, colorFilter);
   if (order.length === 0) return null;
 
   // order 是最新在前，因此最后一条即最早记录
@@ -426,8 +465,8 @@ async function getEarliestDate(filter = 'home') {
  * 均匀采样（P2）：当记录数远大于采样数时，不再只取前 50 条（可能全为短/长文本导致偏差），
  * 而是按步长均匀抽取，使平均值更接近全量。
  */
-async function getStorageEstimate(filter = 'home') {
-  const order = await getFilteredOrder(filter);
+async function getStorageEstimate(filter = 'home', colorFilter = null) {
+  const order = await getFilteredOrder(filter, colorFilter);
   if (order.length === 0) return 0;
 
   const sampleSize = Math.min(CONFIG.STORAGE_ESTIMATE_SAMPLES, order.length);

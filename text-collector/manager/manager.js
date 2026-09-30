@@ -34,6 +34,7 @@ let newRecordTimer = null;
 // 本地修改（删除/清空/撤销）期间置为 true，抑制 onChanged 的重复追加
 let ignoreAllOrderChanges = false;
 let currentTab = 'home';
+let savedColorFilter = 'all';
 
 // ── 状态读写通道 ──
 // 通过函数参数/回调把状态读写给 render.js 等模块，避免跨文件共享可变变量。
@@ -48,6 +49,9 @@ function getTotalCount() { return totalCount; }
 function getLoading() { return isLoading; }
 function isIgnoreOrderChanges() { return ignoreAllOrderChanges; }
 function getCurrentTab() { return currentTab; }
+function getCurrentColorFilter() {
+  return currentTab === 'saved' && savedColorFilter !== 'all' ? savedColorFilter : null;
+}
 
 /** currentOffset += n（默认 1）：loadMore 翻页、onChanged 每插入一张新卡片 */
 function incrementLoaded(n = 1) { currentOffset += n; }
@@ -70,7 +74,7 @@ function setLoading(bool) { isLoading = bool; }
 function setIgnoreOrderChanges(bool) { ignoreAllOrderChanges = bool; }
 
 const listBridge = {
-  getLoadedCount, getTotalCount, getLoading, getCurrentTab,
+  getLoadedCount, getTotalCount, getLoading, getCurrentTab, getCurrentColorFilter,
   incrementLoaded, decrementLoaded, resetLoaded,
   setTotalCount, incrementTotal, decrementTotal,
   setLoading, setIgnoreOrderChanges,
@@ -82,6 +86,7 @@ const $btnClear = document.getElementById('btn-clear');
 const $btnExport = document.getElementById('btn-export');
 const $exportMenu = document.getElementById('export-menu');
 const $collectToggle = document.getElementById('collect-toggle');
+const $savedColorFilter = document.getElementById('saved-color-filter');
 const $newRecordsHint = document.getElementById('new-records-hint');
 
 // ── 初始化 ──
@@ -108,6 +113,16 @@ function updateToggleUI(enabled) {
     $collectToggle.classList.add('off');
     $collectToggle.setAttribute('aria-checked', 'false');
   }
+}
+
+function updateSavedColorFilterUI() {
+  if (!$savedColorFilter) return;
+  $savedColorFilter.classList.toggle('hidden', currentTab !== 'saved');
+  $savedColorFilter.querySelectorAll('[data-color-filter]').forEach(button => {
+    const active = button.dataset.colorFilter === savedColorFilter;
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-pressed', active ? 'true' : 'false');
+  });
 }
 
 // ── 开关切换 ──
@@ -166,12 +181,13 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
         .then(async recordsData => {
           const sortedNewIds = newOrder.filter(id => newIds.includes(id));
           // 审计修复 P1-1：实时追加时，按当前 active 标签页 (currentTab) 筛选，防止在「已保存」页签中误入未收藏的新记录
-          const matchingIds = filterOrderRecords(sortedNewIds, recordsData, currentTab);
+          const colorFilter = getCurrentColorFilter();
+          const matchingIds = filterOrderRecords(sortedNewIds, recordsData, currentTab, colorFilter);
           if (matchingIds.length > 0) {
             newRecordsCount += matchingIds.length;
-            const filteredOrder = await getFilteredOrder(currentTab);
+            const filteredOrder = await getFilteredOrder(currentTab, colorFilter);
             setTotalCount(filteredOrder.length);
-            updateRecordInfo(getTotalCount(), currentTab);
+            updateRecordInfo(getTotalCount(), currentTab, colorFilter);
 
             prependNewCards(recordsData, matchingIds, listBridge, () => { incrementLoaded(); });
 
@@ -201,10 +217,21 @@ function setupListeners() {
 
   const $tabHome = document.getElementById('tab-home');
   const $tabSaved = document.getElementById('tab-saved');
+  $savedColorFilter.querySelectorAll('[data-color-filter]').forEach(button => {
+    button.addEventListener('click', async () => {
+      const nextColor = button.dataset.colorFilter;
+      if (currentTab !== 'saved' || nextColor === savedColorFilter) return;
+      savedColorFilter = nextColor;
+      updateSavedColorFilterUI();
+      await loadFirstPage(listBridge);
+    });
+  });
 
   const handleTabSwitch = async (tabName) => {
     if (currentTab === tabName) return;
     currentTab = tabName;
+    savedColorFilter = 'all';
+    updateSavedColorFilterUI();
     if ($tabHome) {
       $tabHome.classList.toggle('active', tabName === 'home');
       $tabHome.setAttribute('aria-selected', tabName === 'home' ? 'true' : 'false');
@@ -300,84 +327,8 @@ function setupListeners() {
   $btnLoadMore.addEventListener('click', () => loadMore(listBridge));
 }
 
-// ── 待办 Tab 桥接（v1.0.0） ──
-// 把管理页的 showToast / showConfirmModal / showEditModal 暴露给 todo.js 使用，
-// 避免 todo.js 直接依赖 manager.js 的内部变量 / 重复实现。
-window.__managerBridge = {
-  showToast: showToast,
-  showConfirm: showConfirmModal,
-  showEdit: showEditModal,
-};
-
-// ── 采集 tab 下的 toolbar 额外按钮（导出 / 清空）：仅采集 tab 可见 ──
-const $collectExtras = document.getElementById('collect-toolbar-extras');
-function setCollectExtrasVisible(visible) {
-  if (!$collectExtras) return;
-  $collectExtras.classList.toggle('hidden', !visible);
-}
-
-// ── 顶 Tab 路由：#collect（默认）/ #todo ──
-function applyRouteFromHash() {
-  const h = (location.hash || '').replace(/^#/, '');
-  const isTodo = h.indexOf('todo') === 0;
-  const viewCollect = document.getElementById('view-collect');
-  const viewTodo = document.getElementById('view-todo');
-  const collectToggle = document.getElementById('collect-toggle');
-  const toolbarCount = document.getElementById('toolbar-count');
-
-  if (viewCollect) viewCollect.classList.toggle('hidden', isTodo);
-  if (viewTodo) viewTodo.classList.toggle('hidden', !isTodo);
-  if (collectToggle) {
-    // 待办 tab 下置灰，避免误操作影响采集状态
-    collectToggle.classList.toggle('is-disabled', isTodo);
-    collectToggle.setAttribute('aria-disabled', isTodo ? 'true' : 'false');
-  }
-  // 采集数据条数仅在采集 tab 下展示；待办 tab 下的总览在侧边栏的徽标
-  if (toolbarCount) toolbarCount.classList.toggle('hidden', isTodo);
-  setCollectExtrasVisible(!isTodo);
-
-  // 主 Tab 切到待办时，同步把 hash 交给 todo.js 解析并渲染。
-  // TodoApp 尚在异步初始化时会自行忽略；init 完成后会再次强制渲染首屏。
-  if (isTodo && window.TodoApp && typeof window.TodoApp.handleHashChange === 'function') {
-    window.TodoApp.handleHashChange();
-  }
-}
-
-window.addEventListener('hashchange', applyRouteFromHash);
-
-// 顶部 brand 入口链接（采集 / 待办）兜底：
-// 当 hash 已经等于目标值时，hashchange 不会触发，链接点击"无效"。
-// 这里拦截 click 强制应用当前路由，确保从 #todo 点"采集"一定能切到 #collect 视图。
-function setupBrandLinks() {
-  const $collectLink = document.getElementById('brand-collect-link');
-  const $todoLink = document.getElementById('brand-todo-link');
-  if ($collectLink) {
-    $collectLink.addEventListener('click', (e) => {
-      // 已经是 #collect / 空 hash 时也强制刷新一次视图（避免 hashchange 不触发）
-      applyRouteFromHash();
-      // 如果当前就在 #collect，浏览器不会改 hash，链接也不会滚动；保持原状即可
-    });
-  }
-  if ($todoLink) {
-    $todoLink.addEventListener('click', () => {
-      applyRouteFromHash();
-    });
-  }
-}
-
-// 启动：任何一步抛错都展示错误态，避免白屏
+// 管理页只有一个主视图，不需要主视图 hash 路由。
 init().catch(err => {
   console.error('[text-collector] init failed:', err);
   renderLoadError();
-}).then(() => {
-  // 默认进采集 tab（URL hash 不强制写入，保留 history 干净；
-  // applyRouteFromHash 自带默认逻辑：hash 为空视为 #collect）
-  setupBrandLinks();
-  applyRouteFromHash();
-  // 启动待办模块
-  if (window.TodoApp && typeof window.TodoApp.init === 'function') {
-    window.TodoApp.init().catch(err => {
-      console.error('[text-collector] todo init failed:', err);
-    });
-  }
 });
