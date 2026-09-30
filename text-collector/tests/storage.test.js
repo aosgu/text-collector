@@ -6,13 +6,22 @@
  * （如 hostname 会小写化、IDN 转 punycode、默认端口不进入 origin）。
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+import { runInNewContext } from 'node:vm';
 import { readSource, extractFunction } from './helpers/load-source.js';
 
 const source = readSource('utils/storage.js');
 const { fn: getUrlKey } = extractFunction(source, 'getUrlKey');
 const { fn: getDomain } = extractFunction(source, 'getDomain');
 const { fn: filterOrderRecords } = extractFunction(source, 'filterOrderRecords');
+const testColorCatalog = [
+  { id: 'red' }, { id: 'orange' }, { id: 'yellow' }, { id: 'green' },
+  { id: 'blue' }, { id: 'purple' }, { id: 'gray' },
+];
+const { fn: isValidSnippetColorRaw } = extractFunction(source, 'isValidSnippetColor', {
+  SNIPPET_COLORS: testColorCatalog,
+});
+const isValidSnippetColor = color => isValidSnippetColorRaw(color, testColorCatalog);
 
 describe('getUrlKey', () => {
   it('常规 URL：origin + pathname（忽略 query 与 hash）', () => {
@@ -137,3 +146,44 @@ describe('filterOrderRecords', () => {
   });
 });
 
+describe('snippet color labels', () => {
+  it('按颜色筛选只返回已收藏且颜色匹配的记录；全部颜色仍包含未标记的旧记录', () => {
+    const order = ['red', 'blue', 'old', 'unsaved'];
+    const records = {
+      'snip_red': { id: 'red', saved: true, color: 'red' },
+      'snip_blue': { id: 'blue', saved: true, color: 'blue' },
+      'snip_old': { id: 'old', saved: true },
+      'snip_unsaved': { id: 'unsaved', saved: false, color: 'red' },
+    };
+    expect(filterOrderRecords(order, records, 'saved', 'red')).toEqual(['red']);
+    expect(filterOrderRecords(order, records, 'saved')).toEqual(['red', 'blue', 'old']);
+  });
+
+  it('颜色更新会收藏记录、支持清除标签，并拒绝未知颜色', async () => {
+    expect(isValidSnippetColor('purple')).toBe(true);
+    expect(isValidSnippetColor(null)).toBe(true);
+    expect(isValidSnippetColor('chartreuse')).toBe(false);
+
+    const record = { id: 'x', saved: false };
+    const local = {
+      get: vi.fn(async key => ({ [key]: record })),
+      set: vi.fn(async values => Object.assign(record, values['snip_x'])),
+    };
+    const chrome = { storage: { local } };
+    const context = { chrome };
+    runInNewContext(source + '\nglobalThis.__testColorApi = { setSnippetColor };', context);
+    const setSnippetColor = context.__testColorApi.setSnippetColor;
+
+    const colored = await setSnippetColor('x', 'red');
+    expect(colored.record).toMatchObject({ saved: true, color: 'red' });
+    expect(local.set).toHaveBeenCalledTimes(1);
+
+    await setSnippetColor('x', null);
+    expect(record.saved).toBe(true);
+    expect(record).not.toHaveProperty('color');
+
+    expect(await setSnippetColor('x', 'chartreuse')).toBeNull();
+    expect(local.get).toHaveBeenCalledTimes(2);
+    expect(local.set).toHaveBeenCalledTimes(2);
+  });
+});

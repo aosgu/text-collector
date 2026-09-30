@@ -100,7 +100,7 @@ body {
   flex-wrap: wrap;
 }
 
-/* 顶部的轻量计数（仅采集 tab 显示） */
+/* 顶部的轻量记录计数（采集管理页内显示，窄屏由响应式规则隐藏） */
 .toolbar-count {
   font-family: var(--sans);
   font-size: 11.5px;
@@ -109,18 +109,14 @@ body {
   letter-spacing: 0;
 }
 
-/* 采集 tab 下的 toolbar 额外按钮（导出 / 清空）：水平并排 */
-#collect-toolbar-extras {
+/* toolbar 额外按钮（导出 / 清空）：水平并排 */
+#toolbar-extras {
   display: inline-flex;
   align-items: center;
   gap: 8px;
 }
 
-/* 品牌：图标 + 「采集 / 待办」
-   - 两者字号、字体、字重一致（serif 18px 600）
-   - 斜杠分隔符降低视觉权重
-   - 「采集」与「待办」均为可点击的入口链接：点击分别切到 #collect / #todo
-   - 整组无激活态、无箭头——只是入口文字 */
+/* 品牌：图标 + 产品名称 */
 .brand {
   display: flex;
   align-items: center;
@@ -143,54 +139,6 @@ body {
   gap: 0;
   white-space: nowrap;
 }
-.brand-sep {
-  color: var(--text-dim);
-  font-weight: 400;
-  margin: 0 3px;
-  font-family: var(--serif);
-  font-size: 18px;
-}
-/* 「采集」入口：默认深色（视觉主项），hover 略深 */
-.brand-collect {
-  font-family: var(--serif);
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--text);
-  text-decoration: none;
-  cursor: pointer;
-  letter-spacing: -0.01em;
-  transition: color .15s ease;
-}
-.brand-collect:hover {
-  color: #000;
-  text-decoration: none;
-}
-.brand-collect:focus-visible {
-  outline: 2px solid var(--blue);
-  outline-offset: 3px;
-  border-radius: 3px;
-}
-/* 「待办」入口：颜色略弱以区分主次；hover 变深 */
-.brand-sub {
-  font-family: var(--serif);
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--text-muted);
-  text-decoration: none;
-  cursor: pointer;
-  letter-spacing: -0.01em;
-  transition: color .15s ease;
-}
-.brand-sub:hover {
-  color: var(--text);
-  text-decoration: none;
-}
-.brand-sub:focus-visible {
-  outline: 2px solid var(--blue);
-  outline-offset: 3px;
-  border-radius: 3px;
-}
-
 /* ── 按钮 ── */
 .btn {
   display: inline-flex;
@@ -486,6 +434,60 @@ body {
   margin: 0 8px;
 }
 
+/* 已保存页签颜色筛选；默认由“全部”按钮选中 */
+.saved-color-filter {
+  max-width: 760px;
+  margin: 0 auto 14px;
+  padding: 6px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  background: rgba(255,255,255,0.62);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.saved-color-option {
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--text-muted);
+  font: 12px var(--sans);
+  cursor: pointer;
+  transition: color .15s ease, background .15s ease, border-color .15s ease;
+}
+.saved-color-option:hover { background: var(--surface-2); color: var(--text); }
+.saved-color-option.active {
+  background: var(--surface);
+  border-color: var(--border-strong);
+  color: var(--text);
+  box-shadow: 0 1px 2px rgba(28,29,32,0.04);
+}
+.saved-color-option:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 1px;
+}
+.saved-color-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--tag-color);
+  flex: none;
+}
+.saved-color-dot.red { --tag-color: #e5484d; }
+.saved-color-dot.orange { --tag-color: #e98a15; }
+.saved-color-dot.yellow { --tag-color: #d6a500; }
+.saved-color-dot.green { --tag-color: #2d9b55; }
+.saved-color-dot.blue { --tag-color: #2f6fed; }
+.saved-color-dot.purple { --tag-color: #8957c8; }
+.saved-color-dot.gray { --tag-color: #858585; }
+
 /* ── 警告 / 新记录提示 ── */
 .warning-bar {
   max-width: 760px;
@@ -540,6 +542,7 @@ body {
   to   { opacity: 1; transform: translateY(0); }
 }
 .card:hover {
+  z-index: 4;
   border-color: transparent;
   box-shadow: var(--shadow-card-hover);
   transform: translateY(-1px);
@@ -557,13 +560,19 @@ body {
   border-radius: var(--radius-xs);
 }
 
-/* 左侧收藏按钮（替换原静态括号，具备交互且呼应保存语义） */
-.card-favorite {
+/* 书签按钮与悬停颜色面板 */
+.card-favorite-wrap {
   position: absolute;
-  left: 14px;
-  top: 16px;
-  width: 24px;
-  height: 24px;
+  z-index: 5;
+  left: 11px;
+  top: 13px;
+  width: 30px;
+  height: 30px;
+}
+.card-favorite {
+  position: relative;
+  width: 28px;
+  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -590,6 +599,104 @@ body {
   outline-offset: 1px;
   opacity: 1;
 }
+.card-favorite.has-color {
+  color: var(--favorite-color);
+  opacity: 1;
+}
+.card-favorite.has-color svg {
+  fill: color-mix(in srgb, var(--favorite-color) 14%, transparent);
+}
+.favorite-color-picker {
+  position: absolute;
+  z-index: 12;
+  left: 31px;
+  top: -6px;
+  width: 210px;
+  padding: 11px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  box-shadow: var(--shadow-overlay);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(4px) scale(.98);
+  transform-origin: top left;
+  transition: opacity .13s ease, transform .13s ease, visibility .13s ease;
+}
+.card-favorite-wrap:hover .favorite-color-picker,
+.card-favorite-wrap:focus-within .favorite-color-picker {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0) scale(1);
+}
+.favorite-color-title {
+  margin: 0 0 9px 2px;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+}
+.favorite-color-options {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+.favorite-color-option {
+  position: relative;
+  width: 24px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+}
+.favorite-color-option:hover,
+.favorite-color-option.selected { background: var(--surface-2); }
+.favorite-color-option.selected { border-color: var(--border); }
+.favorite-color-option:focus-visible,
+.favorite-color-clear:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 1px;
+}
+.favorite-color-swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--swatch-color);
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,0.08);
+}
+.favorite-color-option.selected .favorite-color-swatch {
+  display: grid;
+  place-items: center;
+  color: #fff;
+}
+.favorite-color-option.selected .favorite-color-swatch::after {
+  content: "✓";
+  font: 700 10px/1 var(--sans);
+  text-shadow: 0 1px 2px rgba(0,0,0,0.35);
+}
+.favorite-color-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-top: 8px;
+  padding-top: 7px;
+  border-top: 1px solid var(--surface-2);
+  color: var(--text-dim);
+  font-size: 10px;
+}
+.favorite-color-clear {
+  padding: 2px 4px;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font: 11px var(--sans);
+  cursor: pointer;
+}
+.favorite-color-clear:hover { color: var(--blue); }
+.favorite-color-clear[hidden] { display: none; }
 
 /* 底部操作区（已保存笔记功能按钮） */
 .card-actions {
@@ -879,7 +986,6 @@ body {
     justify-content: center;
   }
   .brand { margin-right: 4px; }
-  .brand-sub { font-size: 15px; }  /* 窄屏稍小，避免溢出 */
   .toolbar-count { display: none; }
   /* 窄屏：面板改为顶部全宽覆盖，栏目换行平铺 */
   .nav-panel {

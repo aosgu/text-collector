@@ -33,27 +33,37 @@ async function loadFirstPage(bridge) {
   await loadMore(bridge);
 }
 
+function updateEmptyState(filter, colorFilter = null) {
+  const emptyTitle = document.getElementById('empty-title');
+  const emptySub = document.getElementById('empty-sub');
+  if (!emptyTitle || !emptySub) return;
+  if (filter === 'saved' && colorFilter) {
+    const color = SNIPPET_COLORS.find(item => item.id === colorFilter);
+    emptyTitle.textContent = `还没有${color ? color.name : ''}色标签的笔记`;
+    emptySub.textContent = '为已保存的笔记选择此颜色后，就会显示在这里。';
+  } else if (filter === 'saved') {
+    emptyTitle.textContent = '还没有已保存的笔记';
+    emptySub.textContent = '悬停每条记录左侧的书签图标，可保存并选择颜色标签。';
+  } else {
+    emptyTitle.textContent = '还没有采集记录';
+    emptySub.textContent = '去任意网页上选中一段文字，500ms 后会自动保存到这里。';
+  }
+}
+
 async function loadMore(bridge) {
   if (bridge.getLoading()) return;
   bridge.setLoading(true);
   try {
     const filter = bridge && typeof bridge.getCurrentTab === 'function' ? bridge.getCurrentTab() : 'home';
-    const { records, total } = await getSnippets(bridge.getLoadedCount(), PAGE_SIZE, filter);
+    const colorFilter = bridge && typeof bridge.getCurrentColorFilter === 'function'
+      ? bridge.getCurrentColorFilter()
+      : null;
+    const { records, total } = await getSnippets(bridge.getLoadedCount(), PAGE_SIZE, filter, colorFilter);
     bridge.setTotalCount(total);
     bridge.incrementLoaded(records.length);
 
     if (records.length === 0 && bridge.getLoadedCount() === 0) {
-      const emptyTitle = document.getElementById('empty-title');
-      const emptySub = document.getElementById('empty-sub');
-      if (emptyTitle && emptySub) {
-        if (filter === 'saved') {
-          emptyTitle.textContent = '还没有已保存的笔记';
-          emptySub.textContent = '点击每条笔记卡片左侧的书签图标 🔖，即可将其保存到这里。';
-        } else {
-          emptyTitle.textContent = '还没有采集记录';
-          emptySub.textContent = '去任意网页上选中一段文字，500ms 后会自动保存到这里。';
-        }
-      }
+      updateEmptyState(filter, colorFilter);
       $emptyState.classList.remove('hidden');
       $loadMore.classList.add('hidden');
     } else {
@@ -71,7 +81,7 @@ async function loadMore(bridge) {
       $loadMore.classList.add('hidden');
     }
 
-    await updateRecordInfo(bridge.getTotalCount(), filter);
+    await updateRecordInfo(bridge.getTotalCount(), filter, colorFilter);
 
     if (bridge.getTotalCount() > CONFIG.STORAGE_WARNING_THRESHOLD) {
       $storageWarning.classList.remove('hidden');
@@ -90,13 +100,48 @@ async function loadMore(bridge) {
 // ── 计数显示 ──
 // 页面大标题下显示完整描述（条数 / 占用 KB / 排序方式），
 // 顶部 brand 旁显示极简等宽条数，滚动列表时也能看到。
-async function updateRecordInfo(totalCount, filter = 'home') {
-  const sizeKB = await getStorageEstimate(filter);
+async function updateRecordInfo(totalCount, filter = 'home', colorFilter = null) {
+  const sizeKB = await getStorageEstimate(filter, colorFilter);
   // 安全：totalCount / sizeKB 都是 number，不会产生 HTML 注入；sep span 为硬编码静态标签。
   // 若未来重构引入字符串变量，务必改用 DOM 构造或 textContent。
   $pageSub.innerHTML =
     `共 ${totalCount} 条 <span class="sep">/</span> 占用约 ${sizeKB} KB <span class="sep">/</span> 最新在前`;
   $toolbarCount.textContent = totalCount > 0 ? `${totalCount} snippets` : '';
+}
+
+function getBridgeColorFilter(bridge) {
+  return bridge && typeof bridge.getCurrentColorFilter === 'function'
+    ? bridge.getCurrentColorFilter()
+    : null;
+}
+
+// 标签修改可能让当前记录离开所选颜色；重读当前已加载窗口，不跳回页面顶部。
+async function refreshLoadedPage(bridge) {
+  const filter = bridge.getCurrentTab();
+  const colorFilter = getBridgeColorFilter(bridge);
+  const limit = Math.max(bridge.getLoadedCount(), PAGE_SIZE);
+  const { records, total } = await getSnippets(0, limit, filter, colorFilter);
+  $list.textContent = '';
+  bridge.resetLoaded();
+  bridge.setTotalCount(total);
+  bridge.incrementLoaded(records.length);
+
+  if (records.length === 0) {
+    updateEmptyState(filter, colorFilter);
+    $emptyState.classList.remove('hidden');
+  } else {
+    $emptyState.classList.add('hidden');
+    for (const record of records) {
+      const card = createCard(record, bridge);
+      $list.appendChild(card);
+      applyTruncationCheck(card);
+    }
+  }
+
+  if (bridge.getLoadedCount() < total) $loadMore.classList.remove('hidden');
+  else $loadMore.classList.add('hidden');
+  $storageWarning.classList.toggle('hidden', total <= CONFIG.STORAGE_WARNING_THRESHOLD);
+  await updateRecordInfo(total, filter, colorFilter);
 }
 
 /**
@@ -140,26 +185,25 @@ function createCard(record, bridge) {
     showToast('已复制', { kind: 'success' });
   };
 
-  // 1. 左侧收藏按钮（位于卡片左侧品牌缩进位置）
+  // 左侧书签：悬停 / 键盘聚焦后显示颜色标签选择器。
+  const favoriteWrap = document.createElement('div');
+  favoriteWrap.className = 'card-favorite-wrap';
+
   const favoriteBtn = document.createElement('button');
   favoriteBtn.type = 'button';
-  favoriteBtn.className = 'card-favorite' + (record.saved ? ' active' : '');
-  favoriteBtn.title = record.saved ? '已保存（点击取消收藏）' : '收藏到“已保存”';
-  favoriteBtn.setAttribute('aria-label', record.saved ? '取消收藏' : '收藏这条笔记');
-  favoriteBtn.innerHTML = record.saved ? ICON_BOOKMARK_SOLID : ICON_BOOKMARK_OUTLINE;
+  favoriteBtn.className = 'card-favorite';
   favoriteBtn.addEventListener('click', async (e) => {
     e.stopPropagation();
     const res = await toggleFavoriteSnippet(record.id);
     if (res && res.record) {
       record.saved = res.record.saved;
+      record.color = res.record.color;
     } else {
       record.saved = false;
+      delete record.color;
     }
     const isSaved = !!record.saved;
-    favoriteBtn.classList.toggle('active', isSaved);
-    favoriteBtn.title = isSaved ? '已保存（点击取消收藏）' : '收藏到“已保存”';
-    favoriteBtn.setAttribute('aria-label', isSaved ? '取消收藏' : '收藏这条笔记');
-    favoriteBtn.innerHTML = isSaved ? ICON_BOOKMARK_SOLID : ICON_BOOKMARK_OUTLINE;
+    syncFavoriteControl();
     showToast(isSaved ? '已添加到“已保存”' : '已取消收藏', { kind: isSaved ? 'success' : 'info' });
 
     const currentTab = bridge && typeof bridge.getCurrentTab === 'function' ? bridge.getCurrentTab() : 'home';
@@ -171,21 +215,107 @@ function createCard(record, bridge) {
         card.remove();
         bridge.decrementTotal();
         bridge.decrementLoaded();
-        updateRecordInfo(bridge.getTotalCount(), currentTab);
+        const colorFilter = getBridgeColorFilter(bridge);
+        updateRecordInfo(bridge.getTotalCount(), currentTab, colorFilter);
         if (bridge.getTotalCount() === 0) {
-          const emptyTitle = document.getElementById('empty-title');
-          const emptySub = document.getElementById('empty-sub');
-          if (emptyTitle && emptySub) {
-            emptyTitle.textContent = '还没有已保存的笔记';
-            emptySub.textContent = '点击每条笔记卡片左侧的书签图标 🔖，即可将其保存到这里。';
-          }
+          updateEmptyState(currentTab, colorFilter);
           $emptyState.classList.remove('hidden');
           $loadMore.classList.add('hidden');
         }
       }, 180);
     }
   });
-  card.appendChild(favoriteBtn);
+  favoriteWrap.appendChild(favoriteBtn);
+
+  const palette = document.createElement('div');
+  palette.className = 'favorite-color-picker';
+  palette.setAttribute('role', 'group');
+  palette.setAttribute('aria-label', '已保存笔记颜色标签');
+  const paletteTitle = document.createElement('p');
+  paletteTitle.className = 'favorite-color-title';
+  paletteTitle.textContent = '选择颜色';
+  palette.appendChild(paletteTitle);
+
+  const colorOptions = document.createElement('div');
+  colorOptions.className = 'favorite-color-options';
+  const swatchButtons = [];
+  for (const color of SNIPPET_COLORS) {
+    const swatch = document.createElement('button');
+    swatch.type = 'button';
+    swatch.className = 'favorite-color-option';
+    swatch.title = color.name;
+    swatch.setAttribute('aria-label', color.name + '色');
+    swatch.setAttribute('aria-pressed', 'false');
+    swatch.style.setProperty('--swatch-color', color.hex);
+    const disc = document.createElement('span');
+    disc.className = 'favorite-color-swatch';
+    disc.setAttribute('aria-hidden', 'true');
+    swatch.appendChild(disc);
+    swatch.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const wasSaved = !!record.saved;
+      const result = await setSnippetColor(record.id, color.id);
+      if (!result || !result.record) return;
+      record.saved = result.record.saved;
+      record.color = result.record.color;
+      syncFavoriteControl();
+      const label = color.name + '色';
+      showToast(wasSaved ? '已标记为“' + label + '”' : '已保存并标记为“' + label + '”', { kind: 'success' });
+      const activeColor = getBridgeColorFilter(bridge);
+      if (bridge && bridge.getCurrentTab() === 'saved' && activeColor && activeColor !== record.color) {
+        await refreshLoadedPage(bridge);
+      }
+    });
+    swatchButtons.push({ button: swatch, id: color.id });
+    colorOptions.appendChild(swatch);
+  }
+  palette.appendChild(colorOptions);
+
+  const paletteFooter = document.createElement('div');
+  paletteFooter.className = 'favorite-color-footer';
+  const paletteHint = document.createElement('span');
+  paletteFooter.appendChild(paletteHint);
+  const clearColorBtn = document.createElement('button');
+  clearColorBtn.type = 'button';
+  clearColorBtn.className = 'favorite-color-clear';
+  clearColorBtn.textContent = '移除颜色';
+  clearColorBtn.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    const result = await setSnippetColor(record.id, null);
+    if (!result || !result.record) return;
+    delete record.color;
+    record.saved = true;
+    syncFavoriteControl();
+    showToast('已移除颜色标签', { kind: 'info' });
+    const activeColor = getBridgeColorFilter(bridge);
+    if (bridge && bridge.getCurrentTab() === 'saved' && activeColor) {
+      await refreshLoadedPage(bridge);
+    }
+  });
+  paletteFooter.appendChild(clearColorBtn);
+  palette.appendChild(paletteFooter);
+  favoriteWrap.appendChild(palette);
+  card.appendChild(favoriteWrap);
+
+  function syncFavoriteControl() {
+    const color = SNIPPET_COLORS.find(item => item.id === record.color);
+    favoriteBtn.className = 'card-favorite' + (record.saved ? ' active' : '') + (color ? ' has-color' : '');
+    favoriteBtn.innerHTML = record.saved ? ICON_BOOKMARK_SOLID : ICON_BOOKMARK_OUTLINE;
+    favoriteBtn.title = record.saved ? '已保存；悬停选择颜色' : '悬停选择颜色并保存';
+    favoriteBtn.setAttribute('aria-label', record.saved
+      ? '已保存' + (color ? '，' + color.name + '色标签' : '，未设置颜色标签') + '；聚焦后选择颜色'
+      : '聚焦后选择颜色并保存到已保存');
+    if (color) favoriteBtn.style.setProperty('--favorite-color', color.hex);
+    else favoriteBtn.style.removeProperty('--favorite-color');
+    paletteHint.textContent = record.saved ? (color ? '当前：' + color.name : '尚未设置颜色') : '选色后自动保存';
+    clearColorBtn.hidden = !color;
+    for (const item of swatchButtons) {
+      const selected = !!record.saved && item.id === record.color;
+      item.button.classList.toggle('selected', selected);
+      item.button.setAttribute('aria-pressed', selected ? 'true' : 'false');
+    }
+  }
+  syncFavoriteControl();
 
   const textEl = document.createElement('div');
   textEl.className = 'card-text';
@@ -315,6 +445,7 @@ async function performDeleteRecord(record, card, bridge) {
   const originalIndex = order.indexOf(record.id);
 
   const filter = bridge && typeof bridge.getCurrentTab === 'function' ? bridge.getCurrentTab() : 'home';
+  const colorFilter = getBridgeColorFilter(bridge);
 
   card.style.transition = 'opacity .18s ease, transform .18s ease';
   card.style.opacity = '0';
@@ -324,8 +455,9 @@ async function performDeleteRecord(record, card, bridge) {
     card.remove();
     decrementTotal();  // totalCount = max(0, totalCount - 1)
     decrementLoaded(); // 已加载窗口收缩 1，避免后续 loadMore 从错误 offset 起读导致漏条/重条
-    updateRecordInfo(getTotalCount(), filter);
+    updateRecordInfo(getTotalCount(), filter, colorFilter);
     if (getTotalCount() === 0) {
+      updateEmptyState(filter, colorFilter);
       $emptyState.classList.remove('hidden');
       $loadMore.classList.add('hidden');
     } else if (getLoadedCount() < getTotalCount()) {
@@ -370,7 +502,7 @@ async function performDeleteRecord(record, card, bridge) {
         if (getLoadedCount() < getTotalCount()) {
           $loadMore.classList.remove('hidden');
         }
-        await updateRecordInfo(getTotalCount(), filter);
+        await updateRecordInfo(getTotalCount(), filter, colorFilter);
         showToast('已恢复', { kind: 'success' });
       } finally {
         setIgnoreOrderChanges(false);

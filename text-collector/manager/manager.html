@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>网页文字采集器</title>
 <link rel="stylesheet" href="manager.css">
-<link rel="stylesheet" href="todo.css">
 </head>
 <body>
 
@@ -21,7 +20,7 @@
             <path transform="translate(13.13 7.31) scale(0.0862)" d="M 40 6 L 74 6 L 50 94 L 0 94 Z"/>
           </g>
         </svg>
-        <span class="brand-name"><a href="#collect" class="brand-collect" id="brand-collect-link">采集</a><span class="brand-sep">/</span><a href="#todo" class="brand-sub" id="brand-todo-link">待办</a></span>
+        <span class="brand-name">采集</span>
         <span id="toolbar-count" class="toolbar-count" aria-live="polite"></span>
       </div>
       <!-- 网站导航：hover 展开快捷方式面板（数据来自 config/nav.json，无配置时整体隐藏） -->
@@ -35,8 +34,8 @@
         </button>
         <nav id="nav-panel" class="nav-panel hidden" aria-label="网站快捷方式"></nav>
       </div>
-      <!-- 以下按钮仅在采集 tab 下可见 -->
-      <div id="collect-toolbar-extras">
+      <!-- 管理页工具 -->
+      <div id="toolbar-extras">
         <div class="dropdown">
           <button id="btn-export" class="btn" title="导出记录"
                   aria-haspopup="menu" aria-expanded="false" aria-controls="export-menu">
@@ -61,8 +60,8 @@
     </div>
   </header>
 
-  <!-- ─── 采集 tab（原有内容，结构不变） ─── -->
-  <section id="view-collect" role="tabpanel" aria-labelledby="tab-collect">
+  <!-- 采集记录视图 -->
+  <section>
     <!-- 页面标题 -->
     <div class="page-head">
       <div class="page-head-top">
@@ -73,6 +72,18 @@
         </nav>
       </div>
       <p class="page-sub" id="page-sub">共 0 条 <span class="sep">/</span> 占用约 0 KB <span class="sep">/</span> 最新在前</p>
+    </div>
+
+    <!-- 仅在“已保存”页签显示：按标签颜色筛选；默认显示全部 -->
+    <div id="saved-color-filter" class="saved-color-filter hidden" role="group" aria-label="按标签颜色筛选">
+      <button class="saved-color-option active" type="button" data-color-filter="all" aria-pressed="true">全部</button>
+      <button class="saved-color-option" type="button" data-color-filter="red" aria-pressed="false"><span class="saved-color-dot red" aria-hidden="true"></span>红</button>
+      <button class="saved-color-option" type="button" data-color-filter="orange" aria-pressed="false"><span class="saved-color-dot orange" aria-hidden="true"></span>橙</button>
+      <button class="saved-color-option" type="button" data-color-filter="yellow" aria-pressed="false"><span class="saved-color-dot yellow" aria-hidden="true"></span>黄</button>
+      <button class="saved-color-option" type="button" data-color-filter="green" aria-pressed="false"><span class="saved-color-dot green" aria-hidden="true"></span>绿</button>
+      <button class="saved-color-option" type="button" data-color-filter="blue" aria-pressed="false"><span class="saved-color-dot blue" aria-hidden="true"></span>蓝</button>
+      <button class="saved-color-option" type="button" data-color-filter="purple" aria-pressed="false"><span class="saved-color-dot purple" aria-hidden="true"></span>紫</button>
+      <button class="saved-color-option" type="button" data-color-filter="gray" aria-pressed="false"><span class="saved-color-dot gray" aria-hidden="true"></span>灰</button>
     </div>
 
     <!-- 存储警告 -->
@@ -107,87 +118,16 @@
     </div>
   </section>
 
-  <!-- ─── 待办 tab ─── -->
-  <section id="view-todo" class="hidden" role="tabpanel" aria-labelledby="tab-todo">
-    <div class="todo-layout" style="display:flex; height: calc(100vh - 61px);">
-      <!-- 侧边栏 -->
-      <aside class="todo-sidebar" aria-label="待办导航">
-        <div class="todo-sidebar-section">
-          <div class="todo-sidebar-title">我的清单</div>
-          <div class="todo-list-container" id="todo-list-container"
-               role="list" aria-label="清单列表">
-            <!-- 清单项动态插入 -->
-          </div>
-          <button class="todo-new-list-btn" id="todo-new-list-btn" type="button">
-            <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
-            </svg>
-            新建清单
-          </button>
-        </div>
-
-        <div class="todo-sidebar-divider"></div>
-
-        <nav class="todo-sidebar-nav" aria-label="快捷视图">
-          <button class="todo-nav-item" id="todo-nav-all" type="button" role="link">
-            <svg class="todo-nav-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <rect x="2" y="2" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3"/>
-              <rect x="9" y="2" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3"/>
-              <rect x="2" y="9" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3"/>
-              <rect x="9" y="9" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3"/>
-            </svg>
-            <span class="todo-nav-label">全部待办</span>
-            <span class="todo-nav-badge" id="todo-badge-all"></span>
-          </button>
-          <button class="todo-nav-item" id="todo-nav-done" type="button" role="link">
-            <svg class="todo-nav-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.3"/>
-              <path d="M5.5 8l2 2 3-3.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-            <span class="todo-nav-label">已完成</span>
-            <span class="todo-nav-badge" id="todo-badge-done"></span>
-          </button>
-        </nav>
-
-        <div class="todo-sidebar-divider"></div>
-
-        <nav class="todo-sidebar-nav" aria-label="模板库">
-          <button class="todo-nav-item" id="todo-nav-templates" type="button" role="link">
-            <svg class="todo-nav-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <rect x="2" y="1" width="12" height="14" rx="2" stroke="currentColor" stroke-width="1.3"/>
-              <path d="M5 5h6M5 8h6M5 11h3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
-            </svg>
-            <span class="todo-nav-label">模板库</span>
-            <span class="todo-nav-badge" id="todo-badge-templates"></span>
-          </button>
-        </nav>
-
-        <div class="todo-sidebar-footer">
-          <span id="todo-sidebar-info">本地存储</span>
-        </div>
-      </aside>
-
-      <!-- 主内容区 -->
-      <main class="todo-content" aria-label="待办内容">
-        <div class="todo-content-inner" id="todo-content-inner">
-          <!-- 视图动态渲染 -->
-        </div>
-      </main>
-    </div>
-  </section>
-
   <!-- Toast 容器 -->
   <div id="toast-container" aria-live="polite"></div>
 </div>
 
 <script src="../utils/storage.js"></script>
-<script src="../utils/todo-storage.js"></script>
 <script src="toast.js"></script>
 <script src="nav.js"></script>
 <script src="modal.js"></script>
 <script src="render.js"></script>
 <script src="export.js"></script>
-<script src="todo.js"></script>
 <script src="manager.js"></script>
 </body>
 </html>

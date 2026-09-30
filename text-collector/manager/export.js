@@ -12,9 +12,11 @@
 async function handleExport(format) {
   try {
     const filter = typeof getCurrentTab === 'function' ? getCurrentTab() : 'all';
-    const records = await getAllSnippets(filter);
+    const colorFilter = typeof getCurrentColorFilter === 'function' ? getCurrentColorFilter() : null;
+    const records = await getAllSnippets(filter, colorFilter);
     const dateStr = new Date().toISOString().slice(0, 10);
-    const suffix = filter === 'saved' ? '_saved_' : '_';
+    const colorSuffix = filter === 'saved' && colorFilter ? `${colorFilter}_` : '';
+    const suffix = filter === 'saved' ? `_saved_${colorSuffix}` : '_';
 
     if (format === 'txt') {
       const texts = records.map(r => r.text);

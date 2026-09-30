@@ -1,6 +1,6 @@
 # 网页文字采集器（text-collector）
 
-个人自用的 Chrome 扩展：在任意网页**选中文字即自动保存**，点击工具栏图标打开管理页（采集 / 待办双 Tab），采集可查看、复制、删除（可撤销）、收藏、编辑与导出，待办可建清单、勾选、模板复用。
+个人自用的 Chrome 扩展：在任意网页**选中文字即自动保存**，点击工具栏图标打开管理页，对采集记录进行查看、复制、删除（可撤销）、收藏、编辑与导出。
 
 > 纯个人备忘 · 数据完全本地 · 零外部网络请求 · 不对外发布
 
@@ -11,13 +11,11 @@
 - **去重与扩选合并**：同页同文本不重复保存；5 秒内扩选自动替换旧记录
 - **本地存储**：`chrome.storage.local` 分片存储，不发起任何网络请求
 - **记录管理**：分页列表、一键复制、删除可撤销（5 秒）、清空（二次确认）、收藏/已保存页签、编辑笔记
+- **颜色标签**：悬停或键盘聚焦记录的书签图标，选择红/橙/黄/绿/蓝/紫/灰标签；选色会自动收藏，移除标签不取消收藏；“已保存”页签可按颜色筛选，默认显示全部
 - **导出备份**：TXT（UTF-8 BOM）/ JSON，按当前页签过滤
 - **采集开关**：管理页开关或快捷键 `Ctrl+Shift+S`，关闭时工具栏图标显示灰色 OFF
 - **网站导航**：管理页头部导航图标，hover 展开网站快捷方式分栏面板（新标签页打开），站点列表由包内 `config/nav.json` 配置
-- **待办清单**（v1.0.0 起）：管理页顶 Tab 切换到「待办」即可使用：多清单 + 待办项 + 模板库（首启惰性创建「今日待办」），数据与采集完全隔离（`todo_` 前缀存储键）
-- **待办工作台布局**（v1.0.1）：左侧边栏桌面基准宽度为 300px；添加事项输入框以 480px 为弹性基准，窄窗口可收缩、宽窗口不因剩余空间继续拉伸，只有输入文本超过基准时按内容扩展
 - **Arena 对话导出**（v1.1.0 起）：在 `arena.ai` / `lmarena.ai` 的对话页（`/c/` 路径）右键 →「Arena 对话导出」，整段 Battle Mode 对话（每轮提问 + 双模型回答 + 引用来源）导出为 Markdown 文件下载；纯下载行为，不写入采集存储
-- **清单置顶**（v1.2.0）：待办侧边栏「我的清单」悬停清单项出现上箭头按钮，点击把该清单一次性移到最上面（非永久置顶，不存置顶标记）
 - **键盘可达**：Tab 导航、焦点陷阱、aria 语义
 
 ## 文档地图
@@ -26,8 +24,8 @@
 |------|------|
 | [`docs/_facts.md`](../docs/_facts.md) | **当前事实源**：代码事实清单（页面/模块/操作/数据模型/接口/状态/权限/配置） |
 | [`docs/01-PRODUCT.md`](../docs/01-PRODUCT.md) | 产品文档：定义、目标用户、功能全景、非目标 |
-| [`docs/02-FEATURES.md`](../docs/02-FEATURES.md) | 功能规格：28 个功能，含交互流程、边界情况、置信度 |
-| [`docs/03-USER-FLOWS.md`](../docs/03-USER-FLOWS.md) | 用户流程：8 个关键流程的状态迁移 |
+| [`docs/02-FEATURES.md`](../docs/02-FEATURES.md) | 功能规格：23 个功能，含交互流程、边界情况、置信度 |
+| [`docs/03-USER-FLOWS.md`](../docs/03-USER-FLOWS.md) | 用户流程：9 个关键流程的状态迁移 |
 | [`docs/04-ARCHITECTURE.md`](../docs/04-ARCHITECTURE.md) | 技术架构：模块划分、依赖、部署运行 |
 | [`docs/05-DATA-MODEL.md`](../docs/05-DATA-MODEL.md) | 数据模型：实体字段、接口清单、数据流向 |
 | [`docs/06-DECISIONS.md`](../docs/06-DECISIONS.md) | 技术决策记录（含待确认问题清单） |
@@ -61,7 +59,8 @@
 - 🗑 删除（5 秒内可撤销）；已保存笔记删除需二次确认
 - 「导出」→ TXT 或 JSON（按当前页签过滤）
 - 「清空全部」→ 二次确认；已收藏记录保留在「已保存」页签
-- 🔖 收藏笔记；「编辑」修改已保存笔记内容
+- 🔖 收藏笔记；悬停或键盘聚焦书签图标可选颜色标签，选色时自动收藏；「编辑」修改已保存笔记内容
+- 在「已保存」页签用颜色按钮筛选记录；默认「全部」，可选择红、橙、黄、绿、蓝、紫、灰
 
 ### 网站导航
 
@@ -96,20 +95,6 @@
 - 管理页右上角开关：一键暂停/恢复采集
 - 快捷键 `Ctrl+Shift+S`：浏览器内切换（非全局快捷键，需 Chrome 前台生效）
 - 关闭后工具栏图标显示灰色 OFF
-
-### 待办清单（v1.0.0 起）
-
-- 管理页顶部「**采集 / 待办**」两段文字均为可点击入口；点「待办」切到待办 tab
-- 默认 tab 仍是采集；待办 tab 不会自动开启/影响采集
-- 待办 tab 内：
-  - 左侧栏：清单列表（悬停清单项出现上箭头按钮，点击可把该清单一次性置顶）+ 「全部待办 / 已完成 / 模板库」三个视图入口 + 「+ 新建清单」按钮
-  - 工作台（清单详情）：输入框 + 待办项（未完成在上，已完成自动沉底并可折叠）
-  - 待办项支持双击编辑、勾选完成、悬停删除；未完成项可拖拽手柄排序
-  - 删除清单的入口**仅**在工作台顶部「删除清单」按钮（避免侧边栏误触）
-  - 模板：把任意清单「存为模板」；模板可一键「使用该模板」（建新清单）或「复制到当前清单」
-  - 跨清单汇总：点「全部待办 / 已完成」按清单分组查看
-- 首启惰性创建「今日待办」清单（同名仅首次创建）
-- 数据完全独立于采集（`todo_lists` / `todo_items_<id>` / `todo_templates` / `todo_today_list_id`，与 `snip_*` 不互通）
 
 ## 数据与隐私
 
@@ -147,28 +132,25 @@ text-collector/
 │   ├── arena-exporter.js  # Arena 对话页内容脚本：DOM → Markdown → 下载（v1.1.0）
 │   └── content.css        # toast 宿主钉死样式（与内联样式双保险；不裁剪子元素阴影）
 ├── manager/
-│   ├── manager.html       # 管理页（含 #collect 采集 tab 与 #todo 待办 tab）
-│   ├── manager.js         # 入口 / 编排 / 状态（listBridge）/ hash 路由
+│   ├── manager.html       # 管理页（采集记录列表）
+│   ├── manager.js         # 入口 / 编排 / 状态（listBridge）
 │   ├── render.js          # 列表渲染 / 卡片 / 删除撤销
 │   ├── nav.js             # 网站导航（hover 面板 / 配置读取）
 │   ├── modal.js           # 确认 / 编辑弹窗
 │   ├── toast.js           # 单实例 toast
 │   ├── export.js          # TXT / JSON 导出
-│   ├── todo.js            # 待办 tab 入口 / 视图路由 / 事件 / 拖拽
-│   ├── todo.css           # 待办模块样式（侧边栏 / 4 视图 / 拖拽视觉）
-│   └── manager.css        # 管理页样式（含 :root 变量，被 todo.css 复用）
+│   └── manager.css        # 管理页样式（含 :root 主题变量）
 ├── config/
 │   └── nav.json           # 网站导航配置（后台文件配置，无前端编辑）
 ├── background/
 │   └── service-worker.js  # 安装初始化 / 图标点击 → manager.html / 快捷键 / badge / 右键菜单 → Arena 导出
 ├── utils/
-│   ├── storage.js         # 采集记录分片存储 + CONFIG 常量
-│   └── todo-storage.js    # 待办数据层（todo_ 前缀键，与 snip_* 隔离）
+│   └── storage.js         # 采集记录分片存储 + CONFIG 常量
 ├── icons/                 # 扩展图标（生成产物）
 └── tests/                 # vitest 单元测试（Node 环境）
 ```
 
-- 测试：`cd text-collector && npm install && npm test`（vitest，110 用例：storage 16 + content 44 + nav 9 + todo-storage 36 + arena-exporter 5）
+- 测试：`cd text-collector && npm install && npm test`（vitest，76 用例：storage 18 + content 44 + nav 9 + arena-exporter 5）
 - 图标再生成：`cd design && npm install && npm run icons`（sharp 参数化生成）
 - 详细技术说明见上方「文档地图」
 
@@ -185,4 +167,4 @@ text-collector/
 
 [MIT](../LICENSE)
 
-当前版本 **v1.2.0**。变更日志见 [`docs/CHANGELOG.md`](../docs/CHANGELOG.md)；v0.7.2 及更早的版本历史见 [`docs/archive/legacy-notes.md`](../docs/archive/legacy-notes.md)（历史文档，仅供追溯）。
+当前版本 **v1.4.0**。变更日志见 [`docs/CHANGELOG.md`](../docs/CHANGELOG.md)；v0.7.2 及更早的版本历史见 [`docs/archive/legacy-notes.md`](../docs/archive/legacy-notes.md)（历史文档，仅供追溯）。

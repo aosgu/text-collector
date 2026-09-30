@@ -1,7 +1,7 @@
 # 功能规格 — 网页文字采集器
 
-> 依据：`docs/_facts.md` 与代码（v1.2.0，2026-08-31）。每个功能包含：用户故事、触发入口、交互流程、输入/输出、边界情况、关联接口/数据/组件、置信度。
-> 交互描述均对应到具体组件（DOM id/class）与文件。共 **28 个功能**（功能 21 为 v0.8.0 新增的网站导航；功能 22–27 为 v1.0.0 新增的待办清单；v1.0.1 微调功能 24 的工作台布局与输入宽度行为；v1.0.2 修复功能 14 页面内 toast 的视觉渲染缺陷，交互不变；功能 28 为 v1.1.0 新增的 Arena 对话导出；v1.2.0 为功能 23 增加侧边栏清单置顶入口，交互增量、不新增功能编号）。
+> 依据：`docs/_facts.md` 与代码（v1.4.0）。每个功能包含：用户故事、触发入口、交互流程、输入/输出、边界情况、关联接口/数据/组件、置信度。
+> 交互描述均对应到具体组件（DOM id/class）与文件。共 **23 个功能**；网站导航为功能 21、Arena 对话导出为功能 22，已保存记录颜色标签为功能 23（v1.4.0）。
 
 ---
 
@@ -253,14 +253,14 @@
 
 - **用户故事**：窄窗口/触摸设备上布局不崩，系统要求减弱动效时动画停止。
 - **交互流程**（纯 CSS，无 JS 分支）：
-  - `@media (max-width: 640px)`：工具栏纵向堆叠、品牌副标题隐藏、卡片内边距调整、删除按钮 `opacity: 1` 常驻（注释：触摸设备一直显示）；
+  - `@media (max-width: 640px)`：工具栏纵向堆叠、品牌与导航间距调整、卡片内边距调整、删除按钮 `opacity: 1` 常驻（注释：触摸设备一直显示）；
   - `@media (prefers-reduced-motion: reduce)`：全局动画/过渡时长压至 0.01ms。
 - **关联**：`manager/manager.css`（L752 / L776）、`manager/render.js` 注释（删除按钮 hover 语义）。
 - **置信度：高**（CSS 直接可证）。
 
 ## 功能 20：单元测试（开发期能力）
 
-- **说明**：`tests/` 用语法提取源码纯函数（`helpers/load-source.js` 的 `extractFunction`/`extractObjectLiteral`，不执行浏览器代码）在 Node 环境跑 vitest；`storage.test.js` 16 例（getUrlKey/getDomain/filterOrderRecords 等）、`content.test.js` 44 例（准入规则/截断等纯函数 39 例 + v1.0.2 新增「Toast 宿主样式契约」5 例：对 `content.js` cssText 数组与 `content.css` 宿主规则做源码级静态断言——不得 `overflow: hidden`、`contain` 不含 `paint`、双源属性集一致、几何钉死不回退）、`nav.test.js` 9 例（`normalizeNavConfig` 配置校验，v0.8.0 新增）、`todo-storage.test.js` 36 例（待办数据层，v1.0.0 新增）——合计 **105 例**。
+- **说明**：`tests/` 用语法提取源码纯函数（`helpers/load-source.js` 的 `extractFunction`/`extractObjectLiteral`，不执行浏览器代码）在 Node 环境跑 vitest；`storage.test.js` 16 例（getUrlKey/getDomain/filterOrderRecords 等）、`content.test.js` 44 例（准入规则/截断等纯函数 39 例 + v1.0.2 新增「Toast 宿主样式契约」5 例：对 `content.js` cssText 数组与 `content.css` 宿主规则做源码级静态断言——不得 `overflow: hidden`、`contain` 不含 `paint`、双源属性集一致、几何钉死不回退）、`nav.test.js` 9 例（`normalizeNavConfig` 配置校验，v0.8.0 新增）——合计 **74 例**。
 - **关联**：`tests/*`、`vitest.config.js`（environment: node）、`package.json`（`npm test`）。
 - **置信度：高**。
 
@@ -296,120 +296,7 @@
 
 ---
 
-## 功能 22：主视图顶 Tab 切换（采集 / 待办）
-
-> v1.0.0 新增。采集与待办共存于 `manager.html`，通过顶部 brand 区域「采集 / 待办」两段可点击文字入口切换，URL hash 路由驱动。
-
-- **用户故事**：作为用户，我能在同一个管理页内切换采集记录与待办清单，不用开多个页面。
-- **触发入口**：管理页头部 brand 区域：
-  - `采集` → `<a id="brand-collect-link" class="brand-collect" href="#collect">`（serif 18px 600，深色 var(--text)，可点）
-  - `待办` → `<a id="brand-todo-link" class="brand-sub" href="#todo">`（同字号同字重，灰 var(--text-muted)，可点）
-  - 点击扩展图标（SW）→ 默认打开 `manager.html`，无 hash → `applyRouteFromHash` 视为 `#collect` 进采集
-- **交互流程**：
-  1. 点 `采集` 链接 → `location.hash = '#collect'` → 触发 `hashchange` → `applyRouteFromHash()` 隐藏 `#view-todo`、显示 `#view-collect`、解除采集开关置灰、显示 `toolbar-count` 与 `collect-toolbar-extras`；
-  2. 点 `待办` 链接 → `location.hash = '#todo'` → `applyRouteFromHash()` 切到 `#view-todo`、置灰采集开关、隐藏采集计数与导出/清空按钮；
-  3. hash 已是目标值时点同一链接：`setupBrandLinks` 在 click 上兜底再调一次 `applyRouteFromHash`，避免 hashchange 不触发导致"看起来没反应"。
-- **URL hash 协议**（todo.js 也消费同一协议）：
-  - `#collect` → 采集 tab
-  - `#todo` → 待办工作台（默认取当前清单或今日待办）
-  - `#todo/all` / `#todo/done` / `#todo/templates` / `#todo/list/<id>` → 待办内 4 视图
-- **采集开关在待办 tab 下的行为**：`is-disabled` 类 + `aria-disabled="true"`，点击/键盘不响应；视觉上透明度 0.5。回到采集 tab 即恢复。
-- **边界情况**：URL 直接带 `#todo` 打开 → 仍走 `applyRouteFromHash` 正确路由；hash 解析失败（陌生字符串）→ 视为空 hash = 采集。
-- **关联**：`manager/manager.html`（brand-link）、`manager/manager.js`（`applyRouteFromHash` / `setupBrandLinks` / `window.addEventListener('hashchange', ...)`）、`manager/manager.css`（`.brand-collect` / `.brand-sub` / `.toggle.is-disabled`）、`background/service-worker.js`（默认打开 `manager.html`）。
-- **置信度：高**。
-
-## 功能 23：待办 — 清单 CRUD
-
-> v1.0.0 新增。`utils/todo-storage.js` 纯数据层 + `manager/todo.js` 渲染/事件。
-
-- **用户故事**：作为用户，我能在待办 tab 左侧创建多个清单、重命名、删除，并把常用清单临时置顶到最上面。
-- **触发入口**：
-  - 「+ 新建清单」按钮 `#todo-new-list-btn`；
-  - 侧边栏清单项点击（切换工作台）/ 双击（重命名）；
-  - 侧边栏清单项悬停出现的上箭头按钮 `.todo-list-item-pin`（v1.2.0，置顶）；
-  - 工作台顶部「删除清单」按钮（**仅**此处可删，侧边栏无删除入口）。
-- **交互流程**：
-  - **创建**：`createList(name?)` → name 缺省或 trim 后空 → 「未命名清单」；`order = max(order)+1`（新清单放最下）；同步预创建空 items 桶 `todo_items_<id> = []`；UI：跳到新清单的工作台并自动进入重命名态。
-  - **重命名**：双击 / F2 / Enter 触发 → 侧边栏 `todo-list-item-name` 设 `contenteditable=true` 全选；Enter / blur 保存；Esc 取消；空名拒绝（恢复原值）；trim 后改名同步写 `updatedAt`。
-  - **置顶**（v1.2.0）：悬停清单项出现上箭头按钮 → 点击（或键盘 Enter/Space 原生激活）→ `onPinList(listId)` → 经既有 `reorderLists` 把目标清单一次性重排到第一位（`order` 重写为目标 1、其余按原相对顺序 2..n）。**一次性重排而非永久置顶**：不新增置顶标记字段 / 存储键，后续新建清单或再次置顶其他清单都会把它正常挤下去。UI：侧边栏立即按新顺序重渲染；成功 toast「已置顶「X」」。点击上箭头按钮**不**触发清单切换 / 双击重命名（容器 `click` 代理优先拦截）。
-  - **删除**：工作台「删除清单」按钮 → `showConfirmModal` 二次确认（含清单名 + 不可撤销提示）→ `deleteList(id)`（同步清 items 桶 + 若是「今日待办」清 `todo_today_list_id`）；UI：当前工作台清单被删 → 自动切到 `#todo/all`；toast「已删除清单」（success）。
-- **输入/输出**：清单名 string（trim + 限长 60）；操作结果 → 存储 + 视图切换。
-- **边界情况**：重命名空名 throw → UI 静默恢复；删除不存在 id throw → toast danger；模板引用已删除清单的 items 仍然有效（**模板是 items 文本快照，与原清单生命周期解耦**）；置顶已在第一位的清单 → toast「该清单已在最上面」（info），不改数据。
-- **关联**：`utils/todo-storage.js`（createList / renameList / deleteList / reorderLists / normalizeListName）、`manager/todo.js`（onCreateList / startRenameList / onDeleteList / onPinList / writeHash）、`manager/modal.js`。
-- **置信度：高**（createList / deleteList / reorderLists 等有 todo-storage.test.js 单测覆盖；置顶经 jsdom 端到端验证）。
-
-## 功能 24：待办 — 事项 CRUD（含拖拽）
-
-- **用户故事**：作为用户，我能给当前清单加待办、勾选、删除、改内容、给未完成项排序。
-- **触发入口**：工作台输入框（`[data-role="add-item-input"]`，`Enter` 提交）+ 复选框（`.todo-check` / `role=checkbox`，Space/Enter 切换）+ 悬停删除按钮（`.todo-item-delete`）+ 双击文本进入编辑 + 未完成项拖拽手柄（`.todo-item-handle`）。
-- **交互流程**：
-  - **添加**：`addItem(listId, text)` → trim 后空 throw；`order = max(未完成项.order)+1`（不影响已完成项 order）；保存后自动重渲染 sidebar（计数）+ 内容区；`updatedAt` 顺带写。v1.0.1 中输入框初始 `width` 与 `flex-basis` 均为 480px：窄容器内允许收缩、容器变宽时不因剩余空间继续拉伸；`input` 事件调用 `resizeAddItemInput`，仅在当前文字的测量宽度超过 480px 时同步扩大其 `width` 与 `flex-basis`，提交后清空并重置。右侧内容内层最大宽度为 960px，添加按钮固定为 28px 弹性项，超长内容不会挤压加号。
-  - **勾选**：`toggleItem(listId, itemId)` → 翻转 `completed` + 写/清 `completedAt`；UI 切复选框 + 文本划线 + 沉底到「已完成」区。
-  - **删除**：`deleteItem(listId, itemId)`；直接删除，无二次确认（**待办项是低破坏操作**）；UI 立即移除。
-  - **内联编辑**：双击文本 → `contenteditable=true` 全选；Enter 保存、Esc 取消、blur 提交；空内容 = 视为删除；与原文相同 = noop；变更通过 `saveItems` 整存。
-  - **拖拽**（仅未完成项）：HTML5 dragstart/dragover/drop；目标项加 `todo-item-drop-above` 视觉提示；drop 后重写未完成项 `order`（已完成项不动）；dragend 清除状态。
-- **输入/输出**：文本 string / 勾选 toggle / 拖拽顺序变更 → 存储 + UI 重渲染。
-- **边界情况**：
-  - 完成后「已完成」区可点击「已完成 N」label 折叠/展开（`state.showCompleted`）；
-  - 跨清单汇总（`#todo/all` / `#todo/done`）下复选框仍可点；删除在汇总视图下也会同步影响原清单；
-  - 拖拽跨 list（`ul.dataset.listId` 不一致）拒绝；跨"已完成"边界拒绝；
-  - 添加事项输入框为空或文本不超过 480px 时保持 480px 基准；在可用空间小于基准时依赖 `flex-shrink` 收缩；超长文本会同步扩大 `width` 与 `flex-basis`，但仍会受容器可用宽度约束；添加按钮始终保留 28px 方形尺寸。
-- **关联**：`utils/todo-storage.js`（addItem / toggleItem / deleteItem / saveItems / sortItems）、`manager/todo.js`（onAddItem / onToggleItem / onDeleteItem / startEditItem / resizeAddItemInput / onDragStart 等）、`manager/todo.css`（`.todo-sidebar` / `.todo-add-form` / `.todo-item` / `.todo-check` / `.todo-item-handle`）。
-- **置信度：高**（addItem / toggleItem / deleteItem / sortItems 等有单测覆盖）。
-
-## 功能 25：待办 — 模板管理
-
-- **用户故事**：作为用户，我能把常用清单存为模板，反复复用。
-- **触发入口**：清单工作台顶部「存为模板」按钮；模板库视图下的「使用该模板」/「复制到当前清单」/ 卡片右上角删除按钮。
-- **交互流程**：
-  - **存为模板**：`saveAsTemplate(listId, templateName?)` → 弹出 `showEditModal` 输入模板名（默认取清单名）→ 仅快照 `items.map(content)` 文本列表（**不含** id / completed / 时间戳）→ 写入 `todo_templates`；空清单 → toast 拒绝。
-  - **使用模板**：`createListFromTemplate(templateId, listName?)` → 建新清单（同名模板）→ 按顺序 `addItem` 全部模板内容（未完成态）→ 跳到该清单工作台 + toast。
-  - **复制到当前清单**：`copyTemplateToList(templateId, listId)` → 按顺序追加到现有清单末尾；返回 `{added: N}`（过滤空字符串后实际添加数）；**需先在工作台视图**否则 toast 提示。
-  - **删除模板**：模板卡片右上角删除 → `showConfirmModal` 二次确认 → `deleteTemplate(id)`；toast。
-- **输入/输出**：模板名 / 模板 items 文本数组 → 存储；UI 卡片 / 视图切换。
-- **边界情况**：
-  - 空清单不能存为模板；
-  - 模板名 trim 后空 → 取清单名；
-  - 模板 items 为空 → 复制时 toast「模板为空，无可复制内容」，不写存储；
-  - 模板可被任何清单使用（与原清单生命周期解耦，删除原清单不影响模板）。
-- **关联**：`utils/todo-storage.js`（saveAsTemplate / createListFromTemplate / copyTemplateToList / deleteTemplate / loadTemplates）、`manager/todo.js`（onSaveAsTemplate / onUseTemplate / onCopyTemplateToCurrentList / onDeleteTemplate / makeTemplateCard）、`manager/modal.js`。
-- **置信度：高**（saveAsTemplate / createListFromTemplate / copyTemplateToList 等有单测覆盖）。
-
-## 功能 26：待办 — 四视图切换
-
-- **用户故事**：作为用户，我能从侧边栏在不同粒度间切换：单清单详情 / 全部清单汇总未完成 / 全部清单汇总已完成 / 模板库。
-- **触发入口**：侧边栏 `#todo-nav-all` / `#todo-nav-done` / `#todo-nav-templates` 三个按钮（`role=link`）；URL hash `#todo/all` / `#todo/done` / `#todo/templates` / `#todo` / `#todo/list/<id>`。
-- **交互流程**：
-  - **工作台（默认）**：当前清单的标题 + 进度文字「X / Y」+ 子标题「共 N 条 · 完成后自动沉底」+ 两个操作按钮（存为模板 / 删除清单）+ 输入框 + 未完成项列表（可拖拽）+ 已完成区（可折叠）+ 空态提示；自动 focus 输入框。
-  - **全部待办**：跨清单按清单分组（`todo-summary-group`），每组显示清单名 + 计数徽标 + 未完成项；空态「暂无未完成事项」；总条数显示在子标题。
-  - **已完成**：同上但显示已完成项 + 完成时间（如「今天 14:30」/「昨天 18:00」/「X 月 X 日」）；点复选框可恢复为未完成。
-  - **模板库**：卡片网格（`todo-template-grid` 响应式 `auto-fill minmax(220px, 1fr)`），每卡显示模板名 + 「N 个待办 · 更新于 X」+ 前 5 项预览 + hover 显示「使用该模板」「复制到当前清单」两按钮 + 右上角删除按钮；空态「还没有模板」。
-  - URL 改变（hashchange）→ `applyRouteFromHash`（manager.js）+ `handleHashChange`（todo.js）双层路由：manager.js 负责主视图切换，todo.js 负责待办内视图。
-- **输入/输出**：用户点击 / URL 变化 → 视图状态 + 重渲染。
-- **边界情况**：
-  - 全部待办 / 已完成汇总：含 0 项的清单不出现在分组中；
-  - 模板库：无模板时显示空态引导；
-  - 工作台清单不存在（hash 里的 id 已失效）→ 自动 fallback 到第一个清单。
-- **关联**：`manager/todo.js`（renderListView / renderAllView / renderDoneView / renderTemplatesView / handleHashChange / switchTo / writeHash）、`manager/manager.css` `.todo-view-*` / `.todo-summary-*` / `.todo-template-*`。
-- **置信度：高**。
-
-## 功能 27：待办 — 首启惰性创建「今日待办」
-
-- **用户故事**：作为用户，我首次打开待办 tab 时不用手动建第一个清单，系统帮我创建好。
-- **触发入口**：`manager/todo.js` `init()` 首调 `getOrCreateTodayList()`。
-- **交互流程**：
-  1. 读 `todo_today_list_id`；若 id 存在且对应清单仍在 `todo_lists` → 直接返回该清单；
-  2. 否则 `createList('今日待办')` → 写 `todo_today_list_id = list.id` → 返回；
-  3. 若原 id 对应的清单被删了（典型：用户主动删）→ 先清 `todo_today_list_id` 标记，再走创建路径（幂等恢复）。
-- **输入/输出**：无用户输入；输出为 TodoList 对象。
-- **边界情况**：
-  - 连续调用不会重复创建（id 已写入）；
-  - 清单被删后再次访问会重建（保持单实例的"今日待办"持续可用）；
-  - 创建失败（storage 异常）→ todo.js 静默 catch，不阻塞 init（用户可手动 `+ 新建清单`）。
-- **关联**：`utils/todo-storage.js`（`getOrCreateTodayList`）、`manager/todo.js`（init）。
-- **置信度：高**（幂等与失效重建有单测覆盖）。
-
-## 功能 28：Arena 对话导出（v1.1.0）
+## 功能 22：Arena 对话导出（v1.1.0）
 
 - **用户故事**：作为用户，我在 arena.ai 的对话页上右键，即可把整段 Battle Mode 对话（每轮用户提问 + 双模型回答 + 引用来源）导出为 Markdown 文件。
 - **触发入口**：仅 `https://arena.ai/c/*`、`https://lmarena.ai/c/*` 对话页右键菜单「Arena 对话导出」（`manifest.json` permissions `contextMenus`；菜单项 `documentUrlPatterns` 限定对话页，其它页面不显示）。能力合并自独立扩展 arena-md-exporter v1.1.0。
@@ -419,7 +306,7 @@
   3. 内容脚本 `extractConversation()` 按时间正序提取消息列表（`ol.flex-col-reverse`，DOM 最新在前需反转；用户消息 `div.mx-auto`，模型组 `div.w-full` → `@container/carousel` 幻灯片各卡片，模型名取 `h2` "Message from <模型>"）；
   4. `buildMarkdown()` 组装（元信息头 + 每轮用户/各模型回答/引用来源列表 + 尾注），`download()` 以 blob 触发 `arena-<日期>-<时间>-<话题>.md` 下载；
   5. toast 反馈：优先复用 `content.js` 全局 `showToast`（与采集 toast 视觉一致），不可用时退回右下角简易样式。
-- **输入**：页面 DOM（需先滚动加载全部历史消息——页面为滚动懒加载）；**输出**：Markdown 文件下载（纯下载，不写入 `snip_*`/`todo_*` 存储）。
+- **输入**：页面 DOM（需先滚动加载全部历史消息——页面为滚动懒加载）；**输出**：Markdown 文件下载（纯下载，不写入采集记录存储）。
 - **Markdown 转换要点**：嵌套列表缩进（4 空格/层，有序父级下安全）、`<ol start>`、代码围栏按内容最长反引号串加长并保留 `language-*`、表格 `|` / 链接文本 `[]` / 链接地址空白括号转义、相对链接转绝对、`<hr>`/`<img>` 不丢弃、引用来源标题按序号锚定剥离前缀（"1Genetic…"、"12 遗传…"、"1. "、"(3) "，且不误伤"2024 年指南"类标题）。
 - **边界情况**：
   - 非对话页（首页/排行榜/其它网站）→ 菜单项不显示；即使误触发也被 URL 校验拦下；
@@ -429,3 +316,19 @@
   - 与独立扩展 arena-md-exporter 同时启用 → 右键出现重复菜单项，应停用其一。
 - **关联**：`background/service-worker.js`（菜单注册/点击分发）、`content/arena-exporter.js`（提取/转换/下载）、`manifest.json`（contextMenus/scripting 权限、第二个 content_scripts 条目）、`tests/arena-exporter.test.js`（cleanTitle 5 例）。
 - **置信度：高**（jsdom 对真实保存页 5 轮/10 答/44 来源端到端与基准一致；cleanTitle 有单测；DOM 选择器依赖站点 2026-08 结构，改版时可用页面控制台 `__arenaExport.extractConversation()` 排查）。
+
+## 功能 23：已保存记录颜色标签与筛选（v1.4.0）
+
+- **用户故事**：我可以给已保存记录选一个颜色标签，并在「已保存」中快速筛出同色记录。
+- **颜色**：红、橙、黄、绿、蓝、紫、灰（`red` / `orange` / `yellow` / `green` / `blue` / `purple` / `gray`）；每条记录至多一个颜色，未标记记录仍包含在「全部」中。
+- **触发入口**：卡片左侧书签图标；鼠标悬停或键盘聚焦后显示七色浮层。已保存页签下方直接显示全部/颜色筛选按钮（不另设「颜色」标题），默认选择「全部」，仅在该页签可见。
+- **交互流程**：
+  1. 点击书签仍按原逻辑收藏/取消收藏；
+  2. 悬停或键盘聚焦书签后点击颜色：为记录写入 `color`；若记录尚未收藏，则同时收藏，toast 告知已保存并标记；
+  3. 已收藏记录再次选其他颜色即替换原颜色；「移除颜色」只清除标签、不取消收藏；
+  4. 点击「已保存」内的颜色筛选按钮，以 `saved === true && record.color === 颜色ID` 筛选。切换页签时筛选重置为「全部」。
+- **存储**：颜色作为 Snippet 的可选 `color` 字段保存在现有 `snip_<uuid>` 对象中；未标记时不写入字段。旧记录兼容，缺少该字段仍正常显示。
+- **导出**：导出遵循当前页签与颜色筛选；选中特定颜色时导出文件名包含该颜色 ID。
+- **边界情况**：取消收藏同时移除颜色；在颜色筛选结果中更改/移除标签后，记录按新筛选条件刷新；无匹配记录显示对应空状态。
+- **关联**：`utils/storage.js`（`setSnippetColor`、`filterOrderRecords`、分页/导出筛选）；`manager/render.js`（书签浮层）；`manager/manager.js`（筛选状态）；`manager/manager.html` / `manager/manager.css`；`tests/storage.test.js`。
+- **置信度：高**（存储和筛选有单测，具体交互以实现为准）。
