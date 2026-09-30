@@ -8,14 +8,15 @@
 const SCHEMA_VERSION = 1;
 
 // 已保存记录可选的单色标签（ID 持久化；名称和色值只用于界面展示）。
+// 注意：色值需与 manager/manager.css 的 --tag-* 变量保持一致。
 const SNIPPET_COLORS = Object.freeze([
-  { id: 'red', name: '红', hex: '#e5484d' },
-  { id: 'orange', name: '橙', hex: '#e98a15' },
-  { id: 'yellow', name: '黄', hex: '#d6a500' },
-  { id: 'green', name: '绿', hex: '#2d9b55' },
-  { id: 'blue', name: '蓝', hex: '#2f6fed' },
-  { id: 'purple', name: '紫', hex: '#8957c8' },
-  { id: 'gray', name: '灰', hex: '#858585' },
+  { id: 'red', name: '红', hex: '#FF3B30' },
+  { id: 'orange', name: '橙', hex: '#FF9500' },
+  { id: 'yellow', name: '黄', hex: '#FFCC00' },
+  { id: 'green', name: '绿', hex: '#34C759' },
+  { id: 'blue', name: '蓝', hex: '#007AFF' },
+  { id: 'purple', name: '紫', hex: '#AF52DE' },
+  { id: 'gray', name: '灰', hex: '#8E8E93' },
 ]);
 
 // ── 可配置常量 ──

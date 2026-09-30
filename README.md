@@ -5,4 +5,4 @@
 - 纯个人备忘 · 数据完全本地 · 零外部网络请求
 - 扩展代码与完整 README：[`text-collector/`](text-collector/README.md)
 - 文档：`docs/`（[`_facts.md`](docs/_facts.md) 为当前事实源，[`CHANGELOG.md`](docs/CHANGELOG.md) 为变更日志，[`archive/`](docs/archive/) 为历史归档，仅供追溯）
-- 当前版本：**v1.4.0**（为已保存的采集记录新增七色标签及颜色筛选；采集与 Arena 对话导出功能保留）
+- 当前版本：**v1.4.1**（调整七色标签的色值、颜色筛选改为无框设计、书签图标换形；采集与 Arena 对话导出功能保留）

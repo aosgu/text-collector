@@ -1,6 +1,6 @@
 # 技术架构 — 网页文字采集器
 
-> 当前基线 v1.4.0。Chrome MV3 扩展，原生 JavaScript/CSS，无后端、前端框架或构建步骤。
+> 当前基线 v1.4.1。Chrome MV3 扩展，原生 JavaScript/CSS，无后端、前端框架或构建步骤。
 
 ## 1. 技术栈
 

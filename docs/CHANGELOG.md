@@ -5,6 +5,38 @@
 
 ---
 
+## v1.4.1 — 颜色标签视觉调整（2026-10-01）
+
+仅调整颜色标签相关的视觉呈现：七色换新色值、颜色筛选条改为无框、书签图标换形。**颜色 ID、存储结构、筛选逻辑、导出行为、权限与外部请求均无变化**。
+
+### 调整
+
+- **七色标签换新色值**（`utils/storage.js` 的 `SNIPPET_COLORS`）
+  - 红 `#FF3B30`、橙 `#FF9500`、黄 `#FFCC00`、绿 `#34C759`、蓝 `#007AFF`、紫 `#AF52DE`、灰 `#8E8E93`（原为 `#e5484d` / `#e98a15` / `#d6a500` / `#2d9b55` / `#2f6fed` / `#8957c8` / `#858585`）。
+  - CSS 侧新增 `--tag-red` … `--tag-gray` 变量，`manager.css` 的 `.saved-color-dot.*` 由硬编码 hex 改为引用变量，消除同一套色值的第二份来源（变量需与 `SNIPPET_COLORS.hex` 同步）。
+  - 品牌蓝 `--blue: #2f6fed`（按钮、开关、焦点环）保持不变。
+- **「已保存」颜色筛选改为无框设计**（`manager/manager.css` + `manager/manager.html`）
+  - 容器 `.saved-color-filter`：去掉边框与半透明白底与容器内边距，改为 `padding: 0 28px`（与标题、卡片左缘对齐）、`gap: 5px`、下边距 18px；窄屏 `@media (max-width: 640px)` 为 `padding: 0 16px`。
+  - 选项 `.saved-color-option`：`border: 0`、无底色无描边；hover 为浅灰 `rgba(28,29,32,.045)`；**激活态不再是 chip**——改为文字加粗 600 + 底部 2px 圆角指示线，线色取该标签色，「全部」为七色线性渐变（`--filter-accent`）。
+  - 「全部」按钮新增 10px 的七色 `conic-gradient` 圆点（`.saved-color-dot.all`）。
+- **书签图标换形**（`manager/toast.js` + `manager/render.js` + `manager/manager.css`）
+  - `ICON_BOOKMARK_OUTLINE` / `ICON_BOOKMARK_SOLID` 两个常量合并为单一 `ICON_BOOKMARK`：单面旗形 `path d="M3.25 2.25h9.5v13l-4.75-3.1-4.75 3.1z"`，`viewBox="0 0 16 18"`，`stroke-width="1.65"`，渲染尺寸 17×19。
+  - 描边/填充改由 CSS 按状态控制：未收藏 = 透明填充 + `currentColor` 描边；已收藏（无颜色）= 实色填充；有色标签 = 标签色描边 + 同色 16% 浅填充（`color-mix`，原为 14%）。
+  - `render.js` 的 `syncFavoriteControl()` 不再按 `record.saved` 切换两套图标，统一写入 `ICON_BOOKMARK`。
+
+### 无变化
+
+- 颜色 ID（`red` / `orange` / `yellow` / `green` / `blue` / `purple` / `gray`）、Snippet 的 `color` 字段与 `schemaVersion`（仍为 1）不变，旧记录无需迁移。
+- 筛选语义（`saved === true && color === 筛选色`）、页签切换重置为「全部」、颜色过滤贯穿分页/计数/存储估算/导出均不变。
+- manifest 权限、`host_permissions`、外部请求行为（仍为读取包内 `config/nav.json` 的唯一 `fetch`）不变。
+
+### 验证
+
+- `npm test`：**4 个测试文件、76/76 用例通过**（用例数与 v1.4.0 一致，颜色值为展示层常量未纳入断言）。
+- `node --check`：`utils/storage.js`、`manager/render.js`、`manager/manager.js`、`manager/toast.js` 均通过。
+
+---
+
 ## v1.4.0 — 已保存记录颜色标签（2026-09-30）
 
 为采集记录增加七色标签，并在「已保存」页签提供颜色筛选。

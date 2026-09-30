@@ -1,6 +1,6 @@
 # 代码事实清单 — text-collector
 
-> 当前事实基线：v1.4.0。依据当前 `text-collector/` 源码、`manifest.json`、`package.json` 与测试；历史版本信息仅见 `docs/CHANGELOG.md` 和 `docs/archive/`。
+> 当前事实基线：v1.4.1。依据当前 `text-collector/` 源码、`manifest.json`、`package.json` 与测试；历史版本信息仅见 `docs/CHANGELOG.md` 和 `docs/archive/`。
 
 ## 1. 页面与入口
 
@@ -20,7 +20,7 @@
 | Arena 导出 | `content/arena-exporter.js` | 提取对话 DOM、转 Markdown、触发下载。 |
 | 管理页编排 | `manager/manager.js` | 初始化、采集开关、记录页签、已保存颜色筛选、导出菜单、storage 变更订阅与 `listBridge` 状态桥接。 |
 | 列表 | `manager/render.js` | 分页、卡片渲染、悬停/键盘颜色选择器、复制、收藏、编辑、删除撤销和错误态。 |
-| 导出 / 弹窗 / 通知 | `manager/export.js`、`manager/modal.js`、`manager/toast.js` | TXT/JSON 下载、确认与编辑弹窗、管理页 toast。 |
+| 导出 / 弹窗 / 通知 | `manager/export.js`、`manager/modal.js`、`manager/toast.js` | TXT/JSON 下载、确认与编辑弹窗、管理页 toast；`toast.js` 同时持有内联 SVG 图标常量（`ICON_BOOKMARK`、`ICON_TRASH` 等）。 |
 | 网站导航 | `manager/nav.js`、`config/nav.json` | 验证并渲染扩展包内配置的快捷链接。 |
 | 采集数据层 | `utils/storage.js` | 采集记录 CRUD、去重/扩选、索引修复、开关和统计。 |
 | 单元测试 | `tests/*.test.js`、`tests/helpers/load-source.js` | Vitest Node 环境纯函数和源码契约测试。 |
@@ -28,7 +28,7 @@
 ## 3. 用户操作
 
 - 在网页选中文字后自动采集；跳过输入/可编辑区域、短文本、纯符号、纯数字和纯 URL。
-- 管理页支持首页/已保存页签、分页、复制、收藏、颜色标签（红/橙/黄/绿/蓝/紫/灰）、编辑、删除撤销、清空和 TXT/JSON 导出；已保存页签默认显示全部，可按标签颜色过滤。
+- 管理页支持首页/已保存页签、分页、复制、收藏、颜色标签（红/橙/黄/绿/蓝/紫/灰）、编辑、删除撤销、清空和 TXT/JSON 导出；已保存页签默认显示全部，可按标签颜色过滤（筛选条为无框设计：激活态为文字加粗 + 底部 2px 指示线）。
 - 管理页导航面板读取 `config/nav.json`，有效链接仅允许 HTTP(S)。
 - 管理页开关及 `Ctrl+Shift+S` 控制采集；关闭时工具栏 badge 显示 `OFF`。
 - 在 Arena 对话页右键导出 Markdown；导出仅下载文件，不写入采集存储。
@@ -46,6 +46,8 @@
 | `orphanScanV1` | epoch milliseconds | 孤儿记录扫描节流时间。 |
 
 Snippet 主要字段：`id`、`text`、`url`、`urlKey`、`title`、`domain`、`capturedAt`、`lastSelectedAt`；可选字段为 `saved`、`color`（`red` / `orange` / `yellow` / `green` / `blue` / `purple` / `gray`）、`clearedFromHome`、`updatedAt`。
+
+颜色标签的展示色值（持久化的是 ID，色值仅用于界面）：红 `#FF3B30`、橙 `#FF9500`、黄 `#FFCC00`、绿 `#34C759`、蓝 `#007AFF`、紫 `#AF52DE`、灰 `#8E8E93`。来源为 `utils/storage.js` 的 `SNIPPET_COLORS`；`manager/manager.css` 的 `--tag-*` 变量是其 CSS 侧镜像，两处需同步。
 
 > v1.3.0 不再读取或写入旧版本待办数据。若浏览器中已有此前版本留下的 `todo_*` 键，它们保留在本地但不再被扩展访问或使用；本版不自动删除用户数据。
 
@@ -73,6 +75,7 @@ Snippet 主要字段：`id`、`text`、`url`、`urlKey`、`title`、`domain`、`
 
 ## 8. 版本变更
 
+- v1.4.1：颜色标签视觉调整——七色换新色值（`SNIPPET_COLORS`，CSS 侧新增 `--tag-*` 变量）；「已保存」下的颜色筛选改为无框（去边框/底色，激活态为加粗文字 + 底部指示线，「全部」加七色圆点）；书签图标换为单面旗形（`ICON_BOOKMARK`，描边/填充由 CSS 按状态控制）。存储结构、筛选逻辑与权限均无变化。
 - v1.4.0：Snippet 增加可选 `color` 标签；悬停书签或键盘聚焦可选七色，选择颜色会自动加入「已保存」；该页新增颜色筛选，默认「全部」，导出遵循当前颜色筛选。
 - v1.3.0：移除待办 UI、路由、样式、数据层和测试；管理页保留单一采集视图；不触碰旧版遗留本地数据。
 - v1.2.0 及以前：见 `docs/CHANGELOG.md`。待办功能历史描述仅用于记录旧版本，不代表当前代码。
