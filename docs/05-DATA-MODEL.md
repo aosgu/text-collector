@@ -1,6 +1,6 @@
 # 数据模型与数据流 — 网页文字采集器
 
-> 当前基线 v1.4.0。没有数据库或后端；运行时业务数据保存在浏览器 `chrome.storage.local`。接口均为本地 JavaScript 函数，不是网络 API。
+> 当前基线 v1.4.1。没有数据库或后端；运行时业务数据保存在浏览器 `chrome.storage.local`。接口均为本地 JavaScript 函数，不是网络 API。
 
 ## 1. 持久化实体
 

@@ -10,15 +10,12 @@
 const $toastContainer = document.getElementById('toast-container');
 
 // ── 内联 SVG 图标（硬编码常量，唯一允许 innerHTML 的地方） ──
-const ICON_BOOKMARK_OUTLINE =
-  '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">' +
-  '<path d="M3 2.5C3 1.67157 3.67157 1 4.5 1H11.5C12.3284 1 13 1.67157 13 2.5V14.2C13 14.88 12.18 15.23 11.68 14.78L8 11.5L4.32 14.78C3.82 15.23 3 14.88 3 14.2V2.5Z" ' +
-  'stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-
-const ICON_BOOKMARK_SOLID =
-  '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">' +
-  '<path d="M3 2.5C3 1.67157 3.67157 1 4.5 1H11.5C12.3284 1 13 1.67157 13 2.5V14.2C13 14.88 12.18 15.23 11.68 14.78L8 11.5L4.32 14.78C3.82 15.23 3 14.88 3 14.2V2.5Z" ' +
-  'fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+// 书签图标：单一形状，描边/填充由 CSS 按状态控制
+// （未收藏 = 透明填充 + 描边；已收藏 = 实色填充；有色标签 = 标签色描边 + 同色 16% 浅填充）。
+const ICON_BOOKMARK =
+  '<svg viewBox="0 0 16 18" aria-hidden="true">' +
+  '<path d="M3.25 2.25h9.5v13l-4.75-3.1-4.75 3.1z" ' +
+  'stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
 const ICON_TRASH =
   '<svg viewBox="0 0 16 16" fill="none" aria-hidden="true">' +

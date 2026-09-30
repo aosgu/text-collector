@@ -300,7 +300,7 @@ function createCard(record, bridge) {
   function syncFavoriteControl() {
     const color = SNIPPET_COLORS.find(item => item.id === record.color);
     favoriteBtn.className = 'card-favorite' + (record.saved ? ' active' : '') + (color ? ' has-color' : '');
-    favoriteBtn.innerHTML = record.saved ? ICON_BOOKMARK_SOLID : ICON_BOOKMARK_OUTLINE;
+    favoriteBtn.innerHTML = ICON_BOOKMARK;
     favoriteBtn.title = record.saved ? '已保存；悬停选择颜色' : '悬停选择颜色并保存';
     favoriteBtn.setAttribute('aria-label', record.saved
       ? '已保存' + (color ? '，' + color.name + '色标签' : '，未设置颜色标签') + '；聚焦后选择颜色'

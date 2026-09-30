@@ -167,4 +167,4 @@ text-collector/
 
 [MIT](../LICENSE)
 
-当前版本 **v1.4.0**。变更日志见 [`docs/CHANGELOG.md`](../docs/CHANGELOG.md)；v0.7.2 及更早的版本历史见 [`docs/archive/legacy-notes.md`](../docs/archive/legacy-notes.md)（历史文档，仅供追溯）。
+当前版本 **v1.4.1**。变更日志见 [`docs/CHANGELOG.md`](../docs/CHANGELOG.md)；v0.7.2 及更早的版本历史见 [`docs/archive/legacy-notes.md`](../docs/archive/legacy-notes.md)（历史文档，仅供追溯）。
